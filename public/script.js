@@ -1,83 +1,8 @@
 /**
  * script.js - Main application scripts
  * 
- * Contains utility functions for the sample form page (sendEcho, sendLogin, sendHello)
- * and the full chat application logic (login, channels, peers, messaging).
+ * Contains the full chat application logic (login, channels, peers, messaging).
  */
-
-// ========================================
-// Sample Form Functions
-// ========================================
-
-async function sendEcho() {
-  const message = document.getElementById("msg").value;
-
-  try {
-    const response = await fetch("/echo", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text: message })
-    });
-
-    if (!response.ok) {
-      throw new Error("HTTP error " + response.status);
-    }
-
-    const result = await response.text();
-    document.getElementById("response").textContent = "Server replied: " + result;
-  } catch (err) {
-    document.getElementById("response").textContent = "Request failed: " + err.message;
-  }
-}
-
-async function sendLogin() {
-  const message = document.getElementById("msg").value;
-
-  try {
-    const response = await fetch("/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text: message })
-    });
-
-    if (!response.ok) {
-      throw new Error("HTTP error " + response.status);
-    }
-
-    const result = await response.text();
-    document.getElementById("response").textContent = "Server replied: " + result;
-  } catch (err) {
-    document.getElementById("response").textContent = "Request failed: " + err.message;
-  }
-}
-
-async function sendHello() {
-  const message = document.getElementById("msg").value;
-
-  try {
-    const response = await fetch("/hello", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text: message })
-    });
-
-    if (!response.ok) {
-      throw new Error("HTTP error " + response.status);
-    }
-
-    const result = await response.text();
-    document.getElementById("response").textContent = "Server replied: " + result;
-  } catch (err) {
-    document.getElementById("response").textContent = "Request failed: " + err.message;
-  }
-}
-
 
 // ========================================
 // Chat Application - State
