@@ -85,8 +85,17 @@ async function sendHello() {
 let currentUser = '';
 let sessionId = '';
 let currentChannel = 'general';
+let isDmChannel = false;
+let dmTarget = '';
 let lastTimestamp = 0;
 let pollInterval = null;
+
+function getDmPeerName(channelName) {
+  // DM channel format: "dm:user1<->user2"
+  if (!channelName.startsWith('dm:')) return '';
+  const parts = channelName.substring(3).split('<->');
+  return parts.find(u => u !== currentUser) || parts[0];
+}
 
 // ========================================
 // Chat Application - Helpers
@@ -182,15 +191,26 @@ async function refreshChannels() {
   const result = await api('POST', '/channels/', { username: currentUser });
   if (result.status === 'success') {
     const list = document.getElementById('channel-list');
+    const dmList = document.getElementById('dm-list');
     list.innerHTML = '';
+    dmList.innerHTML = '';
+
     for (const ch of result.data.channels) {
-      if (ch.is_dm) continue;  // Skip DM channels in sidebar
       const div = document.createElement('div');
       div.className = 'channel-item' + (ch.name === currentChannel ? ' active' : '');
-      div.innerHTML = '<span class="ch-name"># ' + ch.name + '</span>' +
-        '<span class="ch-badge">' + ch.message_count + '</span>';
-      div.onclick = () => switchChannel(ch.name);
-      list.appendChild(div);
+
+      if (ch.is_dm) {
+        const peerName = getDmPeerName(ch.name);
+        div.innerHTML = '<span class="ch-name dm-name">@ ' + peerName + '</span>' +
+          '<span class="ch-badge">' + ch.message_count + '</span>';
+        div.onclick = () => switchChannel(ch.name);
+        dmList.appendChild(div);
+      } else {
+        div.innerHTML = '<span class="ch-name"># ' + ch.name + '</span>' +
+          '<span class="ch-badge">' + ch.message_count + '</span>';
+        div.onclick = () => switchChannel(ch.name);
+        list.appendChild(div);
+      }
     }
   }
 }
@@ -198,7 +218,17 @@ async function refreshChannels() {
 function switchChannel(name) {
   currentChannel = name;
   lastTimestamp = 0;
-  document.getElementById('chat-header').textContent = '# ' + name;
+  isDmChannel = name.startsWith('dm:');
+  dmTarget = isDmChannel ? getDmPeerName(name) : '';
+
+  if (isDmChannel) {
+    document.getElementById('chat-header').textContent = '@ ' + dmTarget;
+    document.getElementById('msg-input').placeholder = 'Message ' + dmTarget + '...';
+  } else {
+    document.getElementById('chat-header').textContent = '# ' + name;
+    document.getElementById('msg-input').placeholder = 'Type a message...';
+  }
+
   document.getElementById('messages').innerHTML = '';
   refreshChannels();
   loadMessages();
@@ -234,12 +264,34 @@ async function refreshPeers() {
     const list = document.getElementById('peer-list');
     list.innerHTML = '';
     for (const peer of result.data.peers) {
+      if (peer.username === currentUser) continue;
       const div = document.createElement('div');
       div.className = 'peer-item';
       div.innerHTML = '<span class="dot"></span>' + peer.username;
+      div.style.cursor = 'pointer';
+      div.title = 'Click to send direct message';
+      div.onclick = () => openDm(peer.username);
       list.appendChild(div);
     }
   }
+}
+
+async function openDm(peerName) {
+  // DM channel name uses sorted usernames for consistency
+  const sorted = [currentUser, peerName].sort();
+  const dmChannel = 'dm:' + sorted[0] + '<->' + sorted[1];
+
+  // Send an initial empty-check: just switch to the channel.
+  // The server creates the DM channel on first /send-peer/ call.
+  // We pre-create it so we can view it immediately.
+  if (!document.querySelector('.channel-item.active[data-dm="' + peerName + '"]')) {
+    // Ensure the channel exists by sending a lightweight message query
+    await api('POST', '/messages/', { channel: dmChannel });
+  }
+
+  switchChannel(dmChannel);
+  await refreshChannels();
+  showNotification('Direct message with ' + peerName);
 }
 
 // ========================================
@@ -307,11 +359,22 @@ async function sendMessage() {
 
   input.value = '';
 
-  const result = await api('POST', '/broadcast-peer/', {
-    from: currentUser,
-    message: text,
-    channel: currentChannel
-  });
+  let result;
+  if (isDmChannel && dmTarget) {
+    // Direct message via /send-peer/
+    result = await api('POST', '/send-peer/', {
+      from: currentUser,
+      to: dmTarget,
+      message: text
+    });
+  } else {
+    // Broadcast to channel via /broadcast-peer/
+    result = await api('POST', '/broadcast-peer/', {
+      from: currentUser,
+      message: text,
+      channel: currentChannel
+    });
+  }
 
   if (result.status === 'success') {
     // Immediately load messages to see our own
