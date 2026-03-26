@@ -44,10 +44,13 @@ if __name__ == "__main__":
         help='IP address to bind the server. Default is 0.0.0.0')
     parser.add_argument('--server-port', type=int, default=PORT,
         help='Port number to bind the server. Default is {}.'.format(PORT))
+    parser.add_argument('--tracker-url', type=str, default='http://127.0.0.1:9000',
+        help='URL of the central tracker server. Default: http://127.0.0.1:9000')
 
     args = parser.parse_args()
     ip = args.server_ip
     port = args.server_port
+    tracker_url = args.tracker_url
 
     # Prepare and launch the chat application
-    create_chatapp(ip, port)
+    create_chatapp(ip, port, tracker_url=tracker_url)

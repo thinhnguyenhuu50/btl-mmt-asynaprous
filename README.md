@@ -173,21 +173,27 @@ Request/response bodies use JSON format, making the protocol easy to debug and e
 
 ## How to Run
 
+1. **Start the Central Tracker**:
+   ```bash
+   python start_backend.py --server-port 9000
+   ```
+
+2. **Start Peer 1**:
+   ```bash
+   python start_chatapp.py --server-port 8000 --tracker-url http://127.0.0.1:9000
+   ```
+
+3. **Start Peer 2**:
+   ```bash
+   python start_chatapp.py --server-port 8001 --tracker-url http://127.0.0.1:9000
+   ```
+
+Log in to `localhost:8000` as user1, and `localhost:8001` as user2. When sending a message, notice how Peer 1 informs the Tracker at 9000, but immediately contacts Peer 2 at `localhost:8001` via direct HTTP connection.
+
 ```bash
-# Terminal 1: Start the chat server
-python start_chatapp.py --server-port 8000
-
-# Terminal 2: (Optional) Start backend for static files
-python start_backend.py --server-port 9000
-
-# Terminal 3: (Optional) Start proxy
+# Start proxy
 python start_proxy.py --server-port 80
-
-# Open browser
-http://127.0.0.1:8000/chat.html
-# Login: user1 / password1
 
 # You can use proxy server by add '127.0.0.1    chat.local' to your hosts file and then access:
 http://chat.local/chat.html
-
 ```

@@ -89,7 +89,7 @@ async function enterChatScreen() {
   // Register peer info
   await api('POST', '/submit-info/', {
     ip: '127.0.0.1',
-    port: window.location.port || 8000,
+    port: parseInt(window.location.port) || 8000,
     username: currentUser
   });
 
