@@ -26,6 +26,7 @@ from .dictionary import CaseInsensitiveDict
 
 import asyncio
 import inspect
+import json
 
 class HttpAdapter:
     """
@@ -74,7 +75,7 @@ class HttpAdapter:
         self.port = port
         #: Connection
         self.conn = conn
-        #: Conndection address
+        #: Connection address
         self.connaddr = connaddr
         #: Routes
         self.routes = routes
@@ -105,21 +106,64 @@ class HttpAdapter:
         # Response handler
         resp = self.response
 
-        # Handle the request
-        msg = conn.recv(1024).decode()
-        req.prepare(msg, routes)
-        print("[HttpAdapter] Invoke handle_client connection {}".format(addr))
+        try:
+            # Handle the request
+            msg = conn.recv(4096).decode('utf-8', errors='replace')
+            if not msg:
+                conn.close()
+                return
 
-        # Handle request hook
-        if req.hook:
-            #
-            # TODO: handle for App hook here
-            #
-            response = ""
+            req.prepare(msg, routes)
+            print("[HttpAdapter] Invoke handle_client connection {}".format(addr))
 
-        #print("[HttpAdapter] Response content {}".format(response))
-        conn.sendall(response)
-        conn.close()
+            response = b""
+
+            # Handle request hook (routed webapp endpoints)
+            if req.hook:
+                # Call the registered route handler
+                print("[HttpAdapter] Dispatching to hook: {}".format(req.hook))
+                try:
+                    # Extract headers and body for the handler
+                    headers_str = json.dumps(req.headers) if req.headers else "{}"
+                    body_str = req.body if req.body else ""
+
+                    if inspect.iscoroutinefunction(req.hook):
+                        # Run async handler
+                        loop = asyncio.new_event_loop()
+                        result = loop.run_until_complete(req.hook(headers_str, body_str))
+                        loop.close()
+                    else:
+                        result = req.hook(headers_str, body_str)
+
+                    # Build JSON response from handler result
+                    if isinstance(result, bytes):
+                        response = resp.build_json_response(result)
+                    elif isinstance(result, str):
+                        response = resp.build_json_response(result.encode('utf-8'))
+                    elif isinstance(result, dict):
+                        response = resp.build_json_response(
+                            json.dumps(result).encode('utf-8')
+                        )
+                    else:
+                        response = resp.build_json_response(
+                            json.dumps({"result": str(result)}).encode('utf-8')
+                        )
+                except Exception as e:
+                    print("[HttpAdapter] Hook error: {}".format(e))
+                    error_data = json.dumps({"error": str(e)}).encode('utf-8')
+                    resp.status_code = 500
+                    resp.reason = "Internal Server Error"
+                    response = resp.build_json_response(error_data)
+            else:
+                # No hook — serve static file
+                response = resp.build_response(req)
+
+            print("[HttpAdapter] Sending response ({} bytes)".format(len(response)))
+            conn.sendall(response)
+        except Exception as e:
+            print("[HttpAdapter] Error handling client {}: {}".format(addr, e))
+        finally:
+            conn.close()
 
     async def handle_client_coroutine(self, reader, writer):
         """
@@ -129,137 +173,81 @@ class HttpAdapter:
         invokes the appropriate route handler if available, builds the response,
         and sends it back to the client.
 
-        :param conn (socket): The client socket connection.
-        :param addr (tuple): The client's address.
-        :param routes (dict): The route mapping for dispatching requests.
+        :param reader (StreamReader): The async stream reader.
+        :param writer (StreamWriter): The async stream writer.
         """
         # Request handler
         req = self.request
         # Response handler
         resp = self.response
 
-        print("[HttpAdapter] Invoke handle_client_coroutine connection {})".format(addr))
         addr = writer.get_extra_info("peername")
+        print("[HttpAdapter] Invoke handle_client_coroutine connection {})".format(addr))
 
-        # TODO Handle the request asynchronously
-        msg = await reader.read(1024)
+        try:
+            # Handle the request asynchronously
+            msg = await reader.read(4096)
+            if not msg:
+                writer.close()
+                return
 
+            req.prepare(msg.decode("utf-8", errors='replace'), routes={})
 
-        req.prepare(msg.decode("utf-8"), routes={})
+            response = b""
 
-        # Handle request hook
-        if req.hook:
-            #
-            # TODO: handle for App hook here
-            #
-            response = ""
+            # Handle request hook
+            if req.hook:
+                headers_str = json.dumps(req.headers) if req.headers else "{}"
+                body_str = req.body if req.body else ""
 
-        # Build response
-        #print("[HttpAdapter] Start **ASYNC** build_response with type {}".format(type(req)))
-        response = resp.build_response(req)
+                if inspect.iscoroutinefunction(req.hook):
+                    result = await req.hook(headers_str, body_str)
+                else:
+                    result = req.hook(headers_str, body_str)
 
-        # Send all the response asynchronously
-        writer.write(response)
-        await writer.drain()
+                if isinstance(result, bytes):
+                    response = resp.build_json_response(result)
+                elif isinstance(result, dict):
+                    response = resp.build_json_response(
+                        json.dumps(result).encode('utf-8')
+                    )
+                else:
+                    response = resp.build_json_response(
+                        str(result).encode('utf-8')
+                    )
+            else:
+                # Build static response
+                response = resp.build_response(req)
 
-    @property
-    def extract_cookies(self, req, resp):
+            # Send response asynchronously
+            writer.write(response)
+            await writer.drain()
+        except Exception as e:
+            print("[HttpAdapter] Coroutine error: {}".format(e))
+        finally:
+            writer.close()
+
+    def extract_cookies(self, req):
         """
-        Build cookies from the :class:`Request <Request>` headers.
+        Extract cookies from the :class:`Request <Request>` headers.
 
-        :param req:(Request) The :class:`Request <Request>` object.
-        :param resp: (Response) The res:class:`Response <Response>` object.
-        :rtype: cookies - A dictionary of cookie key-value pairs.
+        :param req: The :class:`Request <Request>` object.
+        :rtype: dict - A dictionary of cookie key-value pairs.
         """
         cookies = {}
-        for header in headers:
-            if header.startswith("Cookie:"):
-                cookie_str = header.split(":", 1)[1].strip()
-                for pair in cookie_str.split(";"):
-                    key, value = pair.strip().split("=")
-                    cookies[key] = value
+        if hasattr(req, 'cookies') and req.cookies:
+            return req.cookies
+        
+        # Fallback: parse from raw headers
+        if hasattr(req, 'headers') and req.headers:
+            cookie_str = req.headers.get('cookie', '')
+            if cookie_str:
+                for pair in cookie_str.split(';'):
+                    pair = pair.strip()
+                    if '=' in pair:
+                        key, value = pair.split('=', 1)
+                        cookies[key.strip()] = value.strip()
         return cookies
-
-    def build_response(self, req, resp):
-        """Builds a :class:`Response <Response>` object 
-
-        :param req: The :class:`Request <Request>` used to generate the response.
-        :param resp: The  response object.
-        :rtype: Response
-        """
-        response = Response()
-
-        # Set encoding.
-        response.encoding = get_encoding_from_headers(response.headers)
-        response.raw = resp
-        response.reason = response.raw.reason
-
-        if isinstance(req.url, bytes):
-            response.url = req.url.decode("utf-8")
-        else:
-            response.url = req.url
-
-        # Add new cookies from the server.
-        response.cookies = extract_cookies(req)
-
-        # Give the Response some context.
-        response.request = req
-        response.connection = self
-
-        return response
-
-    def build_json_response(self, req, resp):
-        """Builds a :class:`Response <Response>` object from JSON data
-
-        :param req: The :class:`Request <Request>` used to generate the response.
-        :param resp: The  response object.
-        :rtype: Response
-        """
-        response = Response(req)
-
-        # Set encoding.
-        response.raw = resp
-
-        if isinstance(req.url, bytes):
-            response.url = req.url.decode("utf-8")
-        else:
-            response.url = req.url
-
-        # Give the Response some context.
-        response.request = req
-        response.connection = self
-
-        return response
-
-
-    # def get_connection(self, url, proxies=None):
-        # """Returns a url connection for the given URL. 
-
-        # :param url: The URL to connect to.
-        # :param proxies: (optional) A Requests-style dictionary of proxies used on this request.
-        # :rtype: int
-        # """
-
-        # proxy = select_proxy(url, proxies)
-
-        # if proxy:
-            # proxy = prepend_scheme_if_needed(proxy, "http")
-            # proxy_url = parse_url(proxy)
-            # if not proxy_url.host:
-                # raise InvalidProxyURL(
-                    # "Please check proxy URL. It is malformed "
-                    # "and could be missing the host."
-                # )
-            # proxy_manager = self.proxy_manager_for(proxy)
-            # conn = proxy_manager.connection_from_url(url)
-        # else:
-            # # Only scheme should be lower case
-            # parsed = urlparse(url)
-            # url = parsed.geturl()
-            # conn = self.poolmanager.connection_from_url(url)
-
-        # return conn
-
 
     def add_headers(self, request):
         """
@@ -283,11 +271,6 @@ class HttpAdapter:
         :rtype: dict
         """
         headers = {}
-        #
-        # TODO: build your authentication here
-        #       username, password =...
-        # we provide dummy auth here
-        #
         username, password = ("user1", "password")
 
         if username:
