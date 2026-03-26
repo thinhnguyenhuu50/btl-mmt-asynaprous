@@ -54,9 +54,9 @@ from .dictionary import CaseInsensitiveDict
 import selectors
 sel = selectors.DefaultSelector()
 
-mode_async = "callback"
-#mode_async = "coroutine"
 mode_async = "threading"
+#mode_async = "callback"
+#mode_async = "coroutine"
 
 def handle_client(ip, port, conn, addr, routes):
     """
@@ -76,7 +76,7 @@ def handle_client(ip, port, conn, addr, routes):
 
 
 # Callback for handling new client (itself run in sync mode)
-def handle_client_callback(server, ip, port,conn, addr, routes):
+def handle_client_callback(server, ip, port, conn, addr, routes):
     """
     Initialize connection instance and delegates the client handling logic to it.
 
@@ -106,8 +106,8 @@ async def handle_client_coroutine(reader, writer):
 
     # Handle client in asynchronous mode
     while True:
-          daemon = HttpAdapter(None, None, None, None, None)
-           await daemon.handle_client_coroutine(reader, writer)
+        daemon = HttpAdapter(None, None, None, None, None)
+        await daemon.handle_client_coroutine(reader, writer)
 
 async def async_server(ip="0.0.0.0", port=7000, routes={}):
     print("[Backend] async_server **ASYNC** listening on port {}".format(port))
@@ -119,9 +119,9 @@ async def async_server(ip="0.0.0.0", port=7000, routes={}):
                isCoFunc += "**ASYNC** "
             print("   + ('{}', '{}'): {}{}".format(key[0], key[1], isCoFunc, str(value)))
 
-    async_server = await asyncio.start_server(handle_client_coroutine, ip, port)
-    async with async_server:
-        await async_server.serve_forever()
+    server = await asyncio.start_server(handle_client_coroutine, ip, port)
+    async with server:
+        await server.serve_forever()
     return
 
 
@@ -148,6 +148,7 @@ def run_backend(ip, port, routes):
 
     # Process socket object
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
         server.bind((ip, port))
@@ -169,20 +170,7 @@ def run_backend(ip, port, routes):
             # Accept connection
             conn, addr = server.accept()
 
-            #
-            #  TODO: implement the step of the client incomping connection
-            #        using non-blocking communication
-            #          + multi-thread
-            #          + callback
-            #          + coroutine
-            #        provided handle_client routine
-            #
-
-
-            # @bksysnet: We provide various mechanisms to handle client connection
-            #            student can merge and provide dynamic selection later
-            #            this provider simplify by using mode selection variable
-            #            change global variable mode_async to select the mechanism
+            # Non-blocking communication using different mechanisms
             if mode_async == "callback":
                # Callback implementation - Event driven architecture
                server.setblocking(False)
@@ -193,8 +181,13 @@ def run_backend(ip, port, routes):
                    callback(key.fileobj, ip, port, conn, addr, routes)
 
             else:
-               # Baseline multi-thread implementation
-               #client_thread = threading.Thread...
+               # Multi-thread implementation: spawn a daemon thread per client
+               client_thread = threading.Thread(
+                   target=handle_client,
+                   args=(ip, port, conn, addr, routes),
+                   daemon=True
+               )
+               client_thread.start()
 
 
     except socket.error as e:
