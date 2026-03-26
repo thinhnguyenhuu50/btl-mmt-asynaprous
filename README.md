@@ -20,7 +20,7 @@ graph LR
 
 **Three server processes:**
 - **Proxy** (`start_proxy.py`) — Routes requests to backends based on hostname config
-- **Backend** (`start_backend.py`) — Serves static files (HTML, CSS, images)
+- **Backend** (`start_backend.py`) — Serves static files from `public/` (HTML, CSS, JS, images)
 - **ChatApp** (`start_chatapp.py`) — Hybrid chat with 12 RESTful API routes
 
 ---
@@ -61,7 +61,7 @@ render_diffs(file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt
 **New files:**
 - [chatapp.py](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/apps/chatapp.py) — 12 RESTful routes for chat
 - [start_chatapp.py](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/start_chatapp.py) — Launcher script
-- [chat.html](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/www/chat.html) — Browser UI
+- [chat.html](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/public/chat.html) — Browser UI
 
 ---
 

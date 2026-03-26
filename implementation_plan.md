@@ -107,7 +107,7 @@ Chat server using AsynapRous with these routes:
 #### [NEW] [start_chatapp.py](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/start_chatapp.py)
 - Entry point script to start the chat server on a configurable port (default 8000)
 
-#### [NEW] [www/chat.html](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/www/chat.html)
+#### [NEW] [public/chat.html](file:///c:/Users/thinh/Documents/HK_6/Computer_Networks/btl/btl-mmt-asynaprous/public/chat.html)
 - Chat UI with: login form, channel list sidebar, message area, text input + send button
 - JavaScript using `fetch()` for async communication (allowed per assignment rules)
 - Periodic polling for new messages

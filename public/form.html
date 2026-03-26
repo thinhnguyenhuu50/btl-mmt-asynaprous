@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simple RESTful HTTP form</title>
+  <script src="script.js"></script>
+</head>
+<body>
+  <h2>Send Message to Server</h2>
+
+  <!-- Input field -->
+  <label for="msg">Message:</label>
+  <input type="text" id="msg">
+  <button onclick="sendEcho()">Send Echo</button>
+  <button onclick="sendLogin()">Send Login</button>
+  <button onclick="sendHello()">Send Hello</button>
+
+  <!-- Output area -->
+  <label for="output">Server output:</label>
+  <p id="response"></p>
+</body>
+</html>
