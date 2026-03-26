@@ -28,11 +28,9 @@ function getDmPeerName(channelName) {
 async function api(method, path, body) {
   const opts = {
     method: method,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin' // Send cookies automatically (RFC 6265)
   };
-  if (sessionId) {
-    opts.headers['Cookie'] = 'session_id=' + sessionId;
-  }
   if (body) {
     opts.body = JSON.stringify(body);
   }
@@ -76,38 +74,65 @@ async function doLogin() {
     currentUser = result.data.username;
     sessionId = result.data.session_id;
 
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('chat-screen').style.display = 'flex';
-    document.getElementById('user-display').textContent = currentUser;
-
-    // Register peer info
-    await api('POST', '/submit-info/', {
-      ip: '127.0.0.1',
-      port: window.location.port || 8000,
-      username: currentUser
-    });
-
-    // Load initial data
-    await refreshChannels();
-    await refreshPeers();
-    loadMessages();
-
-    // Start polling for new messages
-    pollInterval = setInterval(pollMessages, 2000);
+    enterChatScreen();
   } else {
     document.getElementById('login-error').textContent =
       result.message || 'Login failed';
   }
 }
 
+async function enterChatScreen() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('chat-screen').style.display = 'flex';
+  document.getElementById('user-display').textContent = currentUser;
+
+  // Register peer info
+  await api('POST', '/submit-info/', {
+    ip: '127.0.0.1',
+    port: window.location.port || 8000,
+    username: currentUser
+  });
+
+  // Load initial data
+  await refreshChannels();
+  await refreshPeers();
+  loadMessages();
+
+  // Start polling for new messages
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(pollMessages, 2000);
+}
+
 function doLogout() {
   currentUser = '';
   sessionId = '';
+  // Clear the session cookie by expiring it
+  document.cookie = 'session_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
   if (pollInterval) clearInterval(pollInterval);
   document.getElementById('chat-screen').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-pass').value = '';
 }
+
+// ========================================
+// Chat Application - Session Restore
+// ========================================
+async function tryRestoreSession() {
+  try {
+    const result = await api('GET', '/validate-session/');
+    if (result.status === 'success' && result.data && result.data.username) {
+      currentUser = result.data.username;
+      sessionId = result.data.session_id;
+      enterChatScreen();
+      showNotification('Session restored — welcome back, ' + currentUser + '!');
+    }
+  } catch (e) {
+    // No valid session, stay on login screen
+  }
+}
+
+// Auto-restore session on page load
+document.addEventListener('DOMContentLoaded', tryRestoreSession);
 
 // ========================================
 // Chat Application - Channels

@@ -222,11 +222,34 @@ def login(headers="guest", body="anonymous"):
                 "username": username,
                 "session_id": session_id
             }
-            return _json_response(response_data)
+            # Return (json_bytes, cookies_list) tuple so the adapter
+            # sets a real Set-Cookie header (RFC 6265).
+            cookies = ["session_id={}; Path=/; HttpOnly".format(session_id)]
+            return (_json_response(response_data), cookies)
         else:
             return _error_response("Invalid username or password")
     except json.JSONDecodeError:
         return _error_response("Invalid JSON in request body")
+
+
+@app.route('/validate-session/', methods=['GET', 'POST'])
+def validate_session_route(headers="guest", body="anonymous"):
+    """Validate an existing session from the Cookie header.
+
+    This endpoint allows the client to check if a stored cookie
+    still maps to a valid server-side session, enabling session
+    persistence across page refreshes (RFC 6265).
+
+    Protocol: GET /validate-session/
+    Response: {"status": "success", "data": {"username": "...", "session_id": "..."}}
+    """
+    print("[ChatApp] Validate-session request")
+    session_id = _get_session_from_headers(headers)
+    if session_id:
+        username = validate_session(session_id)
+        if username:
+            return _json_response({"username": username, "session_id": session_id})
+    return _error_response("No valid session")
 
 
 @app.route('/submit-info/', methods=['POST'])

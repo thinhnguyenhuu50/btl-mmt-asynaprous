@@ -135,18 +135,23 @@ class HttpAdapter:
                     else:
                         result = req.hook(headers_str, body_str)
 
+                    # Check if handler returned (result, cookies_list) tuple
+                    extra_cookies = None
+                    if isinstance(result, tuple) and len(result) == 2:
+                        result, extra_cookies = result
+
                     # Build JSON response from handler result
                     if isinstance(result, bytes):
-                        response = resp.build_json_response(result)
+                        response = resp.build_json_response(result, extra_cookies=extra_cookies)
                     elif isinstance(result, str):
-                        response = resp.build_json_response(result.encode('utf-8'))
+                        response = resp.build_json_response(result.encode('utf-8'), extra_cookies=extra_cookies)
                     elif isinstance(result, dict):
                         response = resp.build_json_response(
-                            json.dumps(result).encode('utf-8')
+                            json.dumps(result).encode('utf-8'), extra_cookies=extra_cookies
                         )
                     else:
                         response = resp.build_json_response(
-                            json.dumps({"result": str(result)}).encode('utf-8')
+                            json.dumps({"result": str(result)}).encode('utf-8'), extra_cookies=extra_cookies
                         )
                 except Exception as e:
                     print("[HttpAdapter] Hook error: {}".format(e))
