@@ -45,6 +45,7 @@ import json
 import time
 import socket
 import threading
+import asyncio
 
 from daemon import AsynapRous
 from daemon.auth import (
@@ -133,11 +134,8 @@ def _error_response(message):
     return json.dumps({"status": "error", "message": message}).encode('utf-8')
 
 
-def _notify_peer(peer_ip, peer_port, path, data):
-    """Send an HTTP POST request to a peer for P2P communication.
-
-    This implements direct peer-to-peer messaging by establishing
-    a non-blocking TCP connection to the target peer.
+async def _notify_peer_async(peer_ip, peer_port, path, data):
+    """Send an HTTP POST request to a peer non-blockingly for P2P communication.
 
     :param peer_ip (str): IP address of target peer.
     :param peer_port (int): Port of target peer.
@@ -146,10 +144,7 @@ def _notify_peer(peer_ip, peer_port, path, data):
     :rtype: dict or None - response data if successful.
     """
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(5)
-        s.connect((peer_ip, int(peer_port)))
-
+        reader, writer = await asyncio.open_connection(peer_ip, int(peer_port))
         body = json.dumps(data)
         request = (
             "POST {} HTTP/1.1\r\n"
@@ -158,23 +153,28 @@ def _notify_peer(peer_ip, peer_port, path, data):
             "Content-Length: {}\r\n"
             "Connection: close\r\n"
             "\r\n"
-            "{}".format(path, peer_ip, peer_port, len(body), body)
-        )
-        s.sendall(request.encode('utf-8'))
+            "{}"
+        ).format(path, peer_ip, peer_port, len(body), body)
+        writer.write(request.encode('utf-8'))
+        await writer.drain()
 
         response = b""
         while True:
-            chunk = s.recv(4096)
+            chunk = await reader.read(4096)
             if not chunk:
                 break
             response += chunk
-        s.close()
+        writer.close()
+        await writer.wait_closed()
 
         # Parse response body
         response_str = response.decode('utf-8', errors='replace')
         if '\r\n\r\n' in response_str:
             body_part = response_str.split('\r\n\r\n', 1)[1]
-            return json.loads(body_part)
+            try:
+                return json.loads(body_part)
+            except json.JSONDecodeError:
+                pass
         return None
     except Exception as e:
         print("[ChatApp] Error notifying peer {}:{} - {}".format(peer_ip, peer_port, e))
@@ -377,7 +377,7 @@ def connect_peer(headers="guest", body="anonymous"):
 
 
 @app.route('/broadcast-peer/', methods=['POST'])
-def broadcast_peer(headers="guest", body="anonymous"):
+async def broadcast_peer(headers="guest", body="anonymous"):
     """Broadcast a message to all connected peers.
 
     In the P2P paradigm, the broadcasting peer sends the message
@@ -410,10 +410,30 @@ def broadcast_peer(headers="guest", body="anonymous"):
             }
             channels[channel_name]["messages"].append(msg_entry)
 
-            # Broadcast to all members in the channel
+            # Gather target peer info
+            members_to_notify = []
             for member in channels[channel_name]["members"]:
-                if member != from_user:
-                    delivered_to.append(member)
+                if member != from_user and member in peers:
+                    members_to_notify.append(peers[member])
+
+        # Notify peers asynchronously outside the lock
+        tasks = []
+        for peer_info in members_to_notify:
+            delivered_to.append(peer_info["username"])
+            tasks.append(_notify_peer_async(
+                peer_info["ip"], 
+                peer_info["port"], 
+                '/receive-message/', 
+                {
+                    "from": from_user,
+                    "message": message,
+                    "channel": channel_name,
+                    "timestamp": msg_entry["timestamp"]
+                }
+            ))
+        
+        if tasks:
+            await asyncio.gather(*tasks)
 
         return _json_response({
             "delivered_to": delivered_to,
@@ -424,7 +444,7 @@ def broadcast_peer(headers="guest", body="anonymous"):
 
 
 @app.route('/send-peer/', methods=['POST'])
-def send_peer(headers="guest", body="anonymous"):
+async def send_peer(headers="guest", body="anonymous"):
     """Send a direct message to a specific peer.
 
     In P2P mode, this message is sent directly to the target peer.
@@ -460,6 +480,22 @@ def send_peer(headers="guest", body="anonymous"):
                 "timestamp": time.time(),
             }
             channels[dm_channel]["messages"].append(msg_entry)
+
+            target_peer = peers.get(to_user)
+
+        # Send asynchronously to the target peer outside the lock
+        if target_peer:
+            await _notify_peer_async(
+                target_peer["ip"], 
+                target_peer["port"], 
+                '/receive-message/', 
+                {
+                    "from": from_user,
+                    "message": message,
+                    "channel": dm_channel,
+                    "timestamp": msg_entry["timestamp"]
+                }
+            )
 
         return _json_response({"delivered_to": to_user, "channel": dm_channel})
     except json.JSONDecodeError:
@@ -608,17 +644,26 @@ def receive_message(headers="guest", body="anonymous"):
         from_user = data.get('from', 'anonymous')
         message = data.get('message', '')
         channel_name = data.get('channel', 'general')
+        msg_timestamp = data.get('timestamp', time.time())
 
         with _lock:
             if channel_name not in channels:
                 channels[channel_name] = {"members": [], "messages": []}
 
-            channels[channel_name]["messages"].append({
-                "from": from_user,
-                "text": message,
-                "timestamp": time.time(),
-                "channel": channel_name
-            })
+            # Check if this exact message was already added (prevents duplicates when simulating multiple peers on same server)
+            is_dup = False
+            for m in channels[channel_name]["messages"]:
+                if m.get("from") == from_user and m.get("timestamp") == msg_timestamp:
+                    is_dup = True
+                    break
+
+            if not is_dup:
+                channels[channel_name]["messages"].append({
+                    "from": from_user,
+                    "text": message,
+                    "timestamp": msg_timestamp,
+                    "channel": channel_name
+                })
 
         return _json_response({"received": True})
     except json.JSONDecodeError:
