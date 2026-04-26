@@ -3,58 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AsynapRous Chat</title>
+  <title>AsynapRous - Twilight UI</title>
   <link rel="stylesheet" href="style.css">
-
 </head>
 <body>
 
-  <!-- Notification popup -->
+  <div class="twilight-bg">
+    <div class="aurora aurora-1"></div>
+    <div class="aurora aurora-2"></div>
+  </div>
+
   <div id="notification" class="notification"></div>
 
-  <!-- Login Screen -->
   <div id="login-screen">
-    <div class="login-box">
-      <h2>AsynapRous Chat</h2>
-      <input type="text" id="login-user" placeholder="Username" autocomplete="off">
-      <input type="password" id="login-pass" placeholder="Password">
-      <button onclick="doLogin()">Login</button>
+    <div class="soft-card login-box">
+      <div class="app-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+      </div>
+      <h2>AsynapRous</h2>
+      <p class="login-subtitle">Không gian làm việc tập trung & êm dịu</p>
+      
+      <div class="input-group">
+        <input type="text" id="login-user" placeholder="Định danh của bạn..." autocomplete="off">
+        <input type="password" id="login-pass" placeholder="Mã bảo mật...">
+      </div>
+      
+      <button onclick="doLogin()" class="btn-primary">KẾT NỐI NGAY</button>
       <div id="login-error" class="login-error"></div>
     </div>
   </div>
 
-  <!-- Chat Screen -->
-  <div id="chat-screen">
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <h3>AsynapRous</h3>
-        <div class="user-info">Logged in as: <strong id="user-display"></strong></div>
+  <div id="chat-screen" class="layout-3-col">
+    
+    <aside class="left-sidebar soft-card">
+      <div class="user-profile">
+        <div class="avatar"></div>
+        <div class="user-info">
+          <span class="user-name" id="user-display"></span>
+          <span class="user-status"><span class="dot"></span> Đang kết nối</span>
+        </div>
+      </div>
+      
+      <div class="sidebar-scroll">
+        <div class="nav-section">
+          <div class="section-header">KÊNH GIAO TIẾP</div>
+          <div id="channel-list" class="list-container"></div>
+        </div>
+
+        <div class="nav-section">
+          <div class="section-header">TIN NHẮN CÁ NHÂN</div>
+          <div id="dm-list" class="list-container"></div>
+        </div>
       </div>
 
-      <div class="sidebar-section">Channels</div>
-      <div id="channel-list" class="channel-list"></div>
-
-      <div class="sidebar-section">Direct Messages</div>
-      <div id="dm-list" class="channel-list"></div>
-
-      <div class="sidebar-section">Online Peers</div>
-      <div id="peer-list" class="peer-list"></div>
-
-      <div class="sidebar-actions">
-        <button onclick="promptCreateChannel()">+ New Channel</button>
-        <button onclick="refreshPeers()">Refresh Peers</button>
-        <button onclick="doLogout()">Logout</button>
+      <div class="sidebar-footer">
+        <button onclick="promptCreateChannel()" class="btn-ghost">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Tạo Kênh Mới
+        </button>
+        <button id="btn-refresh" onclick="refreshAll()" class="btn-ghost">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.08 3.87"></path></svg>
+          Đồng bộ dữ liệu
+        </button>
+        <button onclick="doLogout()" class="btn-ghost danger">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l3-3-3-3"></path><path d="M21 12H9"></path><path d="M15 3h-6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"></path></svg>
+          Đăng xuất
+        </button>
       </div>
-    </div>
+    </aside>
 
-    <div class="chat-main">
-      <div class="chat-header" id="chat-header"># general</div>
+    <main class="center-main soft-card">
+      <header class="chat-header">
+        <div class="header-title">
+          <span class="hash">#</span>
+          <strong id="chat-header">general</strong>
+        </div>
+      </header>
+      
       <div class="messages" id="messages"></div>
-      <div class="msg-input-area">
-        <input type="text" id="msg-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendMessage()">
-        <button onclick="sendMessage()">Send</button>
+
+      <div id="typing-indicator" class="typing-indicator" style="display: none;">
+        <span id="typing-text"></span>
+        <div class="typing-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
       </div>
-    </div>
+
+      <div class="input-wrapper" style="position: relative;">
+        <div id="emoji-picker" class="emoji-picker soft-card" style="display: none;"></div>
+
+        <div class="input-box">
+          <input type="file" id="file-picker" style="display:none" onchange="uploadFile()">
+          
+          <button onclick="document.getElementById('file-picker').click()" class="btn-icon" title="Đính kèm file">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path></svg>
+          </button>
+          
+          <input type="text" id="msg-input" placeholder="Viết tin nhắn của bạn..." onkeypress="if(event.key==='Enter')sendMessage()" oninput="handleTyping()" onfocus="markAsRead()">
+          
+          <button id="btn-mic" onmousedown="startRecording()" onmouseup="stopRecording()" onmouseleave="stopRecording()" class="btn-icon" title="Giữ để Ghi âm">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </button>
+
+          <button id="btn-emoji-toggle" onclick="toggleEmojiPicker()" class="btn-icon" title="Chèn Emoji">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+          </button>
+
+          <button onclick="sendMessage()" class="btn-send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <aside class="right-sidebar soft-card">
+      <div class="section-header">MẠNG LƯỚI THÀNH VIÊN</div>
+      <div id="peer-list" class="list-container"></div>
+    </aside>
+
   </div>
 
   <script src="script.js"></script>

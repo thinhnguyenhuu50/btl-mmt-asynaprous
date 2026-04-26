@@ -1,333 +1,284 @@
 /**
- * script.js - Main application scripts
- * 
- * Contains the full chat application logic (login, channels, peers, messaging).
+ * script.js - Toàn bộ logic ứng dụng Chat Pro
  */
 
-// ========================================
-// Chat Application - State
-// ========================================
-let currentUser = '';
-let sessionId = '';
-let currentChannel = 'general';
-let isDmChannel = false;
-let dmTarget = '';
-let lastTimestamp = 0;
-let pollInterval = null;
-
-function getDmPeerName(channelName) {
-  // DM channel format: "dm:user1<->user2"
-  if (!channelName.startsWith('dm:')) return '';
-  const parts = channelName.substring(3).split('<->');
-  return parts.find(u => u !== currentUser) || parts[0];
-}
+let currentUser = '', sessionId = '', currentChannel = 'general', isDmChannel = false, dmTarget = '';
+let lastTimestamp = 0, pollInterval = null, typingTimer = null;
+let readCounts = {}, previousTotalUnread = 0, isFirstLoad = true;
 
 // ========================================
-// Chat Application - Helpers
+// Helpers & API
 // ========================================
 async function api(method, path, body) {
-  const opts = {
-    method: method,
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin' // Send cookies automatically (RFC 6265)
-  };
-  if (body) {
-    opts.body = JSON.stringify(body);
-  }
+  const opts = { method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+  if (body) opts.body = JSON.stringify(body);
   try {
     const resp = await fetch(path, opts);
-    const text = await resp.text();
-    return JSON.parse(text);
-  } catch (e) {
-    console.error('API error:', e);
-    return { status: 'error', message: e.message };
-  }
+    return JSON.parse(await resp.text());
+  } catch (e) { return { status: 'error', message: e.message }; }
 }
 
 function showNotification(msg) {
   const el = document.getElementById('notification');
-  el.textContent = msg;
-  el.style.display = 'block';
+  el.textContent = msg; el.style.display = 'block';
   setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
 function formatTime(ts) {
-  const d = new Date(ts * 1000);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text; return div.innerHTML;
+}
+
+function playTingSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(1046.50, ctx.currentTime); 
+    gain.gain.setValueAtTime(0.1, ctx.currentTime); 
+    osc.start(); gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
 }
 
 // ========================================
-// Chat Application - Login / Logout
+// Đăng nhập & Thoát
 // ========================================
 async function doLogin() {
   const username = document.getElementById('login-user').value.trim();
   const password = document.getElementById('login-pass').value;
-
-  if (!username || !password) {
-    document.getElementById('login-error').textContent = 'Please enter username and password';
-    return;
-  }
+  if (!username || !password) return;
 
   const result = await api('POST', '/login/', { username, password });
-
   if (result.status === 'success') {
-    currentUser = result.data.username;
-    sessionId = result.data.session_id;
+    currentUser = result.data.username; sessionId = result.data.session_id;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('chat-screen').style.display = 'flex';
+    document.getElementById('user-display').textContent = currentUser;
 
-    enterChatScreen();
+    await api('POST', '/submit-info/', { ip: '127.0.0.1', port: window.location.port || 8000, username: currentUser });
+    await refreshChannels(); await refreshPeers(); loadMessages();
+
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(() => { pollMessages(); refreshChannels(); }, 2000);
   } else {
-    document.getElementById('login-error').textContent =
-      result.message || 'Login failed';
+    document.getElementById('login-error').textContent = result.message || 'Sai tài khoản hoặc mật khẩu';
   }
-}
-
-async function enterChatScreen() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('chat-screen').style.display = 'flex';
-  document.getElementById('user-display').textContent = currentUser;
-
-  // Register peer info
-  await api('POST', '/submit-info/', {
-    ip: '127.0.0.1',
-    port: window.location.port || 8000,
-    username: currentUser
-  });
-
-  // Load initial data
-  await refreshChannels();
-  await refreshPeers();
-  loadMessages();
-
-  // Start polling for new messages
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(pollMessages, 2000);
 }
 
 function doLogout() {
-  currentUser = '';
-  sessionId = '';
-  // Clear the session cookie by expiring it
   document.cookie = 'session_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
-  if (pollInterval) clearInterval(pollInterval);
-  document.getElementById('chat-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-pass').value = '';
+  location.reload();
 }
 
 // ========================================
-// Chat Application - Session Restore
-// ========================================
-async function tryRestoreSession() {
-  try {
-    const result = await api('GET', '/validate-session/');
-    if (result.status === 'success' && result.data && result.data.username) {
-      currentUser = result.data.username;
-      sessionId = result.data.session_id;
-      enterChatScreen();
-      showNotification('Session restored — welcome back, ' + currentUser + '!');
-    }
-  } catch (e) {
-    // No valid session, stay on login screen
-  }
-}
-
-// Auto-restore session on page load
-document.addEventListener('DOMContentLoaded', tryRestoreSession);
-
-// ========================================
-// Chat Application - Channels
+// Kênh & Danh sách
 // ========================================
 async function refreshChannels() {
   const result = await api('POST', '/channels/', { username: currentUser });
   if (result.status === 'success') {
-    const list = document.getElementById('channel-list');
-    const dmList = document.getElementById('dm-list');
-    list.innerHTML = '';
-    dmList.innerHTML = '';
+    const list = document.getElementById('channel-list'), dmList = document.getElementById('dm-list');
+    list.innerHTML = ''; dmList.innerHTML = '';
+    let currentTotalUnread = 0;
 
     for (const ch of result.data.channels) {
+      if (isFirstLoad || ch.name === currentChannel) readCounts[ch.name] = ch.message_count;
+      let unread = Math.max(0, ch.message_count - (readCounts[ch.name] || 0));
+      currentTotalUnread += unread;
+
       const div = document.createElement('div');
       div.className = 'channel-item' + (ch.name === currentChannel ? ' active' : '');
-
-      if (ch.is_dm) {
-        const peerName = getDmPeerName(ch.name);
-        div.innerHTML = '<span class="ch-name dm-name">@ ' + peerName + '</span>' +
-          '<span class="ch-badge">' + ch.message_count + '</span>';
-        div.onclick = () => switchChannel(ch.name);
-        dmList.appendChild(div);
-      } else {
-        div.innerHTML = '<span class="ch-name"># ' + ch.name + '</span>' +
-          '<span class="ch-badge">' + ch.message_count + '</span>';
-        div.onclick = () => switchChannel(ch.name);
-        list.appendChild(div);
-      }
+      const badgeHtml = unread > 0 ? `<span class="ch-badge unread">${unread} Mới</span>` : `<span class="ch-badge">${ch.message_count}</span>`;
+      div.innerHTML = `<span class="ch-name">${ch.is_dm ? '@ ' + getDmPeerName(ch.name) : '# ' + ch.name}</span>${badgeHtml}`;
+      div.onclick = () => switchChannel(ch.name);
+      if (ch.is_dm) dmList.appendChild(div); else list.appendChild(div);
     }
+    isFirstLoad = false;
+    if (currentTotalUnread > previousTotalUnread) playTingSound();
+    previousTotalUnread = currentTotalUnread;
   }
 }
 
 function switchChannel(name) {
-  currentChannel = name;
-  lastTimestamp = 0;
-  isDmChannel = name.startsWith('dm:');
-  dmTarget = isDmChannel ? getDmPeerName(name) : '';
-
-  if (isDmChannel) {
-    document.getElementById('chat-header').textContent = '@ ' + dmTarget;
-    document.getElementById('msg-input').placeholder = 'Message ' + dmTarget + '...';
-  } else {
-    document.getElementById('chat-header').textContent = '# ' + name;
-    document.getElementById('msg-input').placeholder = 'Type a message...';
-  }
-
+  currentChannel = name; lastTimestamp = 0;
+  isDmChannel = name.startsWith('dm:'); dmTarget = isDmChannel ? getDmPeerName(name) : '';
   document.getElementById('messages').innerHTML = '';
-  refreshChannels();
-  loadMessages();
+  refreshChannels(); loadMessages();
 }
 
-async function promptCreateChannel() {
-  const name = prompt('Enter channel name:');
-  if (!name) return;
+function getDmPeerName(n) { return n.substring(3).split('<->').find(u => u !== currentUser); }
 
-  const result = await api('POST', '/create-channel/', {
-    name: name, creator: currentUser
-  });
-
-  if (result.status === 'success') {
-    // Auto-join the channel
-    await api('POST', '/join-channel/', {
-      channel: name, username: currentUser
-    });
-    await refreshChannels();
-    switchChannel(name);
-    showNotification('Channel #' + name + ' created');
-  } else {
-    alert(result.message || 'Failed to create channel');
-  }
-}
-
-// ========================================
-// Chat Application - Peers
-// ========================================
 async function refreshPeers() {
   const result = await api('GET', '/get-list/');
   if (result.status === 'success') {
-    const list = document.getElementById('peer-list');
-    list.innerHTML = '';
+    const list = document.getElementById('peer-list'); list.innerHTML = '';
     for (const peer of result.data.peers) {
       if (peer.username === currentUser) continue;
-      const div = document.createElement('div');
-      div.className = 'peer-item';
-      div.innerHTML = '<span class="dot"></span>' + peer.username;
-      div.style.cursor = 'pointer';
-      div.title = 'Click to send direct message';
-      div.onclick = () => openDm(peer.username);
+      const div = document.createElement('div'); div.className = 'peer-item';
+      div.innerHTML = `<span class="dot"></span>${peer.username}`;
+      div.onclick = () => { switchChannel('dm:' + [currentUser, peer.username].sort().join('<->')); showNotification('Nhắn tin với ' + peer.username); };
       list.appendChild(div);
     }
   }
 }
 
-async function openDm(peerName) {
-  // DM channel name uses sorted usernames for consistency
-  const sorted = [currentUser, peerName].sort();
-  const dmChannel = 'dm:' + sorted[0] + '<->' + sorted[1];
-
-  // Send an initial empty-check: just switch to the channel.
-  // The server creates the DM channel on first /send-peer/ call.
-  // We pre-create it so we can view it immediately.
-  if (!document.querySelector('.channel-item.active[data-dm="' + peerName + '"]')) {
-    // Ensure the channel exists by sending a lightweight message query
-    await api('POST', '/messages/', { channel: dmChannel });
-  }
-
-  switchChannel(dmChannel);
-  await refreshChannels();
-  showNotification('Direct message with ' + peerName);
+async function promptCreateChannel() {
+  const channelName = prompt("Nhập tên kênh mới:");
+  if (!channelName || channelName.trim() === "") return;
+  const result = await api('POST', '/create-channel/', { name: channelName.trim(), creator: currentUser });
+  if (result.status === 'success') {
+    await refreshChannels(); switchChannel(result.data.channel); 
+  } else alert("Lỗi: " + result.message);
 }
 
+async function refreshAll() { await refreshChannels(); await refreshPeers(); showNotification("Đã cập nhật!"); }
+
 // ========================================
-// Chat Application - Messages
+// Tin nhắn & Avatar Đã Xem & Đang Gõ
 // ========================================
-async function loadMessages() {
-  const result = await api('POST', '/messages/', {
-    channel: currentChannel, since: 0
-  });
-  if (result.status === 'success') {
-    const container = document.getElementById('messages');
-    container.innerHTML = '';
-    for (const msg of result.data.messages) {
-      appendMessage(msg);
-      if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
-    }
-    container.scrollTop = container.scrollHeight;
+async function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim(); if (!text) return;
+  input.value = '';
+  const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
+  const body = isDmChannel ? { from: currentUser, to: dmTarget, message: text } : { from: currentUser, message: text, channel: currentChannel };
+  await api('POST', endpoint, body); await pollMessages();
+}
+
+function handleTyping() {
+  if (!typingTimer) {
+    api('POST', '/signal-typing/', { channel: currentChannel, username: currentUser });
+    typingTimer = setTimeout(() => { typingTimer = null; }, 2000);
   }
+}
+
+function markAsRead() {
+  if (lastTimestamp > 0) api('POST', '/signal-read/', { channel: currentChannel, username: currentUser, timestamp: lastTimestamp });
 }
 
 async function pollMessages() {
-  const result = await api('POST', '/messages/', {
-    channel: currentChannel, since: lastTimestamp
-  });
-  if (result.status === 'success' && result.data.messages.length > 0) {
-    const container = document.getElementById('messages');
-    for (const msg of result.data.messages) {
-      appendMessage(msg);
-      if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
-    }
-    container.scrollTop = container.scrollHeight;
+  const res = await api('POST', '/messages/', { channel: currentChannel, since: lastTimestamp });
+  if (res.status === 'success') {
+    res.data.messages.forEach(msg => { appendMessage(msg); if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; });
+    markAsRead(); // Cứ có tin nhắn là tự đánh dấu đã xem
 
-    // Show notification if message is from another user
-    const lastMsg = result.data.messages[result.data.messages.length - 1];
-    if (lastMsg.from !== currentUser) {
-      showNotification('New message from ' + lastMsg.from);
+    // Render Typing
+    const typers = (res.data.typing || []).filter(u => u !== currentUser);
+    document.getElementById('typing-indicator').style.display = typers.length ? 'flex' : 'none';
+    document.getElementById('typing-text').innerText = typers.length ? typers.join(', ') + ' đang gõ' : '';
+
+    // Render Avatar Messenger Seen
+    document.querySelectorAll('.messenger-seen-row').forEach(el => el.remove());
+    const allMsgs = document.querySelectorAll('.msg');
+    if (allMsgs.length > 0) {
+      const veryLastMsg = allMsgs[allMsgs.length - 1];
+      if (veryLastMsg.dataset.author === currentUser) {
+        const lastTs = parseFloat(veryLastMsg.dataset.timestamp);
+        const readsData = (res.data && res.data.reads) ? res.data.reads : {};
+        const readers = Object.entries(readsData).filter(([u, t]) => u !== currentUser && parseFloat(t) >= lastTs).map(e => e[0]);
+        
+        if (readers.length > 0) {
+          const seenRow = document.createElement('div'); seenRow.className = 'messenger-seen-row';
+          readers.forEach(reader => {
+            const avatar = document.createElement('div'); avatar.className = 'seen-avatar';
+            avatar.innerText = reader.charAt(0).toUpperCase(); avatar.title = 'Đã xem bởi ' + reader;
+            seenRow.appendChild(avatar);
+          });
+          veryLastMsg.appendChild(seenRow);
+        }
+      }
     }
   }
+}
+
+async function loadMessages() {
+  document.getElementById('messages').innerHTML = ''; lastTimestamp = 0;
+  await pollMessages();
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
 
 function appendMessage(msg) {
   const container = document.getElementById('messages');
   const div = document.createElement('div');
-  div.className = 'msg';
-  div.innerHTML =
-    '<span class="msg-author">' + (msg.from || 'unknown') + '</span>' +
-    '<span class="msg-time">' + formatTime(msg.timestamp) + '</span>' +
-    '<div class="msg-text">' + escapeHtml(msg.text || msg.message || '') + '</div>';
-  container.appendChild(div);
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// ========================================
-// Chat Application - Send Message
-// ========================================
-async function sendMessage() {
-  const input = document.getElementById('msg-input');
-  const text = input.value.trim();
-  if (!text) return;
-
-  input.value = '';
-
-  let result;
-  if (isDmChannel && dmTarget) {
-    // Direct message via /send-peer/
-    result = await api('POST', '/send-peer/', {
-      from: currentUser,
-      to: dmTarget,
-      message: text
-    });
+  div.className = 'msg'; div.dataset.author = msg.from; div.dataset.timestamp = msg.timestamp;
+  
+  const rawText = msg.text || msg.message || '';
+  let contentHtml = '';
+  if (rawText.match(/\.(png|jpg|jpeg|gif|webp)$/i) || rawText.startsWith('/uploads/') && !rawText.endsWith('.webm')) {
+    contentHtml = `<img src="${rawText}" class="msg-image" style="max-width:250px;border-radius:12px;margin-top:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);" onclick="window.open('${rawText}')">`;
+  } else if (rawText.match(/\.(pdf|docx|doc|zip|rar)$/i)) {
+    contentHtml = `<a href="${rawText}" target="_blank" class="file-download">📄 Tải xuống: ${rawText.split('/').pop()}</a>`;
+  } else if (rawText.match(/\.(webm|mp3|wav|ogg)$/i)) {
+    contentHtml = `<audio controls src="${rawText}"></audio>`;
   } else {
-    // Broadcast to channel via /broadcast-peer/
-    result = await api('POST', '/broadcast-peer/', {
-      from: currentUser,
-      message: text,
-      channel: currentChannel
-    });
+    contentHtml = `<div class="msg-text">${escapeHtml(rawText)}</div>`;
   }
 
-  if (result.status === 'success') {
-    // Immediately load messages to see our own
-    await pollMessages();
+  div.innerHTML = `<div class="msg-meta"><span class="msg-author">${msg.from || 'unknown'}</span><span class="msg-time">${formatTime(msg.timestamp)}</span></div>${contentHtml}`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+// ========================================
+// Upload File & Voice Record
+// ========================================
+async function uploadFile() {
+  const fileInput = document.getElementById('file-picker'); if (fileInput.files.length === 0) return;
+  const file = fileInput.files[0]; showNotification('Đang tải: ' + file.name);
+  const resp = await fetch('/upload/', { method: 'POST', headers: { 'X-File-Name': file.name, 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+  const result = await resp.json();
+  if (result.status === 'success') { await api('POST', '/broadcast-peer/', { from: currentUser, message: result.url, channel: currentChannel }); pollMessages(); }
+  fileInput.value = '';
+}
+
+let mediaRecorder, audioChunks = [], isRecording = false;
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream); mediaRecorder.start(); isRecording = true;
+    document.getElementById('btn-mic').classList.add('recording'); showNotification("🎙️ Đang thu âm...");
+    mediaRecorder.addEventListener("dataavailable", e => audioChunks.push(e.data));
+    mediaRecorder.addEventListener("stop", async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); audioChunks = [];
+      if (audioBlob.size < 2000) return showNotification("Ghi âm quá ngắn!");
+      const res = await fetch('/upload/', { method: 'POST', headers: { 'X-File-Name': `voice_${Date.now()}.webm` }, body: audioBlob });
+      const result = await res.json();
+      if (result.status === 'success') { await api('POST', '/broadcast-peer/', { from: currentUser, message: result.url, channel: currentChannel }); pollMessages(); }
+    });
+  } catch (err) { alert("Vui lòng cấp quyền Micro!"); }
+}
+
+function stopRecording() {
+  if (isRecording && mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop(); isRecording = false;
+    document.getElementById('btn-mic').classList.remove('recording');
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
   }
 }
+
+// ========================================
+// Emoji Picker
+// ========================================
+const EMOJIS = ["😀","😂","😍","👍","🔥","❤️","✨","🙌","🚀","😭","😊","🥺","😎","🎉","💯","👀","🙏","💀"];
+function initEmojiPicker() {
+  const picker = document.getElementById('emoji-picker'); picker.innerHTML = '';
+  EMOJIS.forEach(emoji => {
+    const span = document.createElement('span'); span.className = 'emoji-item'; span.innerText = emoji;
+    span.onclick = () => { document.getElementById('msg-input').value += emoji; document.getElementById('msg-input').focus(); };
+    picker.appendChild(span);
+  });
+}
+initEmojiPicker();
+function toggleEmojiPicker() {
+  const p = document.getElementById('emoji-picker');
+  p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'grid' : 'none';
+}
+document.addEventListener('click', function(event) {
+  const picker = document.getElementById('emoji-picker'), btn = document.getElementById('btn-emoji-toggle');
+  if (picker.style.display === 'grid' && !picker.contains(event.target) && !btn.contains(event.target)) picker.style.display = 'none';
+});
+
