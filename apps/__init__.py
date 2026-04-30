@@ -5,9 +5,6 @@
 #
 # AsynapRous release
 #
-# The authors hereby grant to Licensee personal permission to use
-# and modify the Licensed Source Code for the sole purpose of studying
-# while attending the course
-#
 
 from .sampleapp import create_sampleapp
+from .chatapp import create_chatapp

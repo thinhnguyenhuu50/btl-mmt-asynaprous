@@ -1,0 +1,57 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "dc49233e90a3b23a22276df511a9ac7a",
+                "from": "user2",
+                "text": "a",
+                "timestamp": 1777482485.7593384,
+                "channel": "general"
+            },
+            {
+                "msg_id": "ec6cd03c7f5975297debb7b097342c43",
+                "from": "user4",
+                "text": "b",
+                "timestamp": 1777482494.458054,
+                "channel": "general"
+            }
+        ]
+    },
+    "aaa": {
+        "members": [
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "84a662bbf13132ee3ca9f2c8b681114f",
+                "from": "user4",
+                "text": "a",
+                "timestamp": 1777482510.2336059,
+                "channel": "aaa"
+            },
+            {
+                "msg_id": "274981b3aae45d5fbb0c1d854c1250d5",
+                "from": "user2",
+                "text": "a",
+                "timestamp": 1777482515.4338112,
+                "channel": "aaa"
+            }
+        ]
+    },
+    "dm:user2<->user4": {
+        "members": [
+            "user2",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "66694f3fe0b497bce5c1baa964b9d7cd",
+                "from": "user2",
+                "to": "user4",
+                "text": "a",
+                "timestamp": 1777483559.5953536
+            }
+        ]
+    }
+}

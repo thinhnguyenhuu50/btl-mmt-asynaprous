@@ -18,3 +18,4 @@ from .request import Request
 from .backend import create_backend
 from .httpadapter import HttpAdapter
 from .dictionary import CaseInsensitiveDict
+from .auth import authenticate, create_session, validate_session
