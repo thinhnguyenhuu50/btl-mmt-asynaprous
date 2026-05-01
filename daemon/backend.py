@@ -70,8 +70,12 @@ async def handle_async_client(reader, writer, routes):
         print(f"[Coroutine Error] {e}")
     finally:
         writer.close()
+    try:
         await writer.wait_closed()
-
+    except (ConnectionResetError, OSError):
+            # Client hoặc Proxy đã ngắt kết nối thô bạo (WinError 64/10054).
+            # Chúng ta cứ lẳng lặng bỏ qua, không cho crash hệ thống.
+        pass
 def create_backend(ip, port, routes={}):
     print(f"🚀 [Backend] Đang khởi động chế độ: {MODE.upper()} tại {ip}:{port}")
 

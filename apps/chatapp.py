@@ -21,95 +21,110 @@ from daemon.auth import (
 app = AsynapRous()
 CURRENT_PORT = 9000 
 
-NODE_ADDRESSES = [
-    "http://127.0.0.1:9000",
-    "http://127.0.0.1:9001",
-    "http://127.0.0.1:9002"
-]
-KNOWN_PEERS = [9000, 9001, 9002] 
-
+TRACKER_URL = "http://127.0.0.1:80"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_DIR = os.path.join(BASE_DIR, "user_databases")
-if not os.path.exists(DB_DIR): os.makedirs(DB_DIR)
+PUBLIC_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "public"))
 
-# ============================================================
-# CƠ CHẾ SỬA LỖI 1: ĐỒNG BỘ SESSION (Chống mất kết nối qua Proxy)
-# ============================================================
-SESSION_FILE = os.path.join(BASE_DIR, "shared_sessions.json")
+active_peers_cache = [] 
+last_tracker_sync = 0
+
+def register_to_tracker():
+    try:
+        data = json.dumps({"port": CURRENT_PORT}).encode('utf-8')
+        req = urllib.request.Request(f"{TRACKER_URL}/register", data=data, headers={'Content-Type': 'application/json'}, method='POST')
+        urllib.request.urlopen(req, timeout=1)
+        print(f"✅ Đã báo danh Port {CURRENT_PORT} với Tracker!")
+    except:
+        print(f"⚠️ Tracker sập. Port {CURRENT_PORT} dùng P2P dự phòng.")
+
+def get_active_peers():
+    global active_peers_cache, last_tracker_sync
+    if time.time() - last_tracker_sync > 5: 
+        try:
+            req = urllib.request.Request(f"{TRACKER_URL}/peers")
+            with urllib.request.urlopen(req, timeout=0.5) as res:
+                data = json.loads(res.read().decode())
+                active_peers_cache = data.get("peers", active_peers_cache)
+                last_tracker_sync = time.time()
+        except: pass 
+    return active_peers_cache
+
+_db_lock = threading.RLock()
+
+def get_db_dir():
+    db_dir = os.path.join(BASE_DIR, f"user_databases_{CURRENT_PORT}")
+    if not os.path.exists(db_dir): os.makedirs(db_dir)
+    return db_dir
+
+def get_session_file():
+    return os.path.join(BASE_DIR, "sessions_global.json")
 
 def save_shared_session(session_id, username):
-    try:
-        sessions = {}
-        if os.path.exists(SESSION_FILE):
-            with open(SESSION_FILE, 'r', encoding='utf-8') as f:
-                sessions = json.load(f)
-        sessions[session_id] = username
-        
-        tmp_file = f"{SESSION_FILE}.tmp.{CURRENT_PORT}"
-        with open(tmp_file, 'w', encoding='utf-8') as f:
-            json.dump(sessions, f)
-        os.replace(tmp_file, SESSION_FILE) # Tráo file cực nhanh (Atomic)
-    except: pass
+    with _db_lock:
+        try:
+            s_file = get_session_file()
+            sessions = {}
+            if os.path.exists(s_file):
+                with open(s_file, 'r', encoding='utf-8') as f: sessions = json.load(f)
+            sessions[session_id] = username
+            with open(f"{s_file}.tmp", 'w', encoding='utf-8') as f: json.dump(sessions, f)
+            os.replace(f"{s_file}.tmp", s_file)
+        except: pass
 
 def get_valid_username(cookies):
-    """Hàm xác thực thông minh: Thử RAM trước, nếu thất bại thử File Chung"""
-    session_id = cookies.get('session_id') if cookies else None
+    session_id = cookies.get('session_id') # Lấy chung 1 tên Cookie
     if not session_id: return None
-    
     username = validate_session(session_id)
     if username: return username
-    
-    # Cứu vãn từ Shared Sessions khi Proxy điều hướng sang Node khác
-    try:
-        if os.path.exists(SESSION_FILE):
-            with open(SESSION_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f).get(session_id)
-    except: pass
+    with _db_lock:
+        try:
+            s_file = get_session_file()
+            if os.path.exists(s_file):
+                with open(s_file, 'r', encoding='utf-8') as f: return json.load(f).get(session_id)
+        except: pass
     return None
 
 def get_db_file(username):
-    return os.path.join(DB_DIR, f"db_{username}.json")
+    return os.path.join(get_db_dir(), f"db_{username}.json")
 
 def load_db(username):
     if not username: return {"general": {"members": [], "messages": []}}
     db_file = get_db_file(username)
-    
-    if not os.path.exists(db_file):
-        data = {"general": {"members": [], "messages": []}}
-        save_db(username, data)
-        return data
-        
-    for _ in range(3):
+    with _db_lock:
+        if not os.path.exists(db_file):
+            data = {"general": {"members": [], "messages": []}}
+            save_db(username, data)
+            return data
         try:
             with open(db_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 if "general" not in data: data["general"] = {"members": [], "messages": []}
                 return data
-        except:
-            time.sleep(0.05)
-    return {"general": {"members": [], "messages": []}}
+        except: return {"general": {"members": [], "messages": []}}
 
 def save_db(username, data):
     if not username: return
     db_file = get_db_file(username)
-    tmp_file = f"{db_file}.tmp.{CURRENT_PORT}"
-    try:
-        with open(tmp_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        os.replace(tmp_file, db_file) 
-    except: pass
-
-
-def p2p_sync_worker(endpoint, payload):
-    payload['is_sync'] = True
-    data_bytes = json.dumps(payload).encode('utf-8')
-    for peer_port in KNOWN_PEERS:
-        if peer_port == CURRENT_PORT: continue
-        url = f"http://127.0.0.1:{peer_port}{endpoint}"
+    with _db_lock:
         try:
-            req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
-            urllib.request.urlopen(req, timeout=0.5)
+            with open(f"{db_file}.tmp", 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            os.replace(f"{db_file}.tmp", db_file) 
         except: pass
+
+@app.route('/')
+def serve_index(headers, body, cookies=None):
+    try:
+        path = os.path.join(PUBLIC_DIR, "index.html")
+        with open(path, 'r', encoding='utf-8') as f: return f.read()
+    except Exception as e: return f"404: {e}"
+
+@app.route('/(.*\\.(?:css|js))')
+def serve_static(headers, body, cookies=None, file_path=None):
+    try:
+        full_path = os.path.join(PUBLIC_DIR, file_path)
+        with open(full_path, 'r', encoding='utf-8') as f: return f.read()
+    except: return ""
 
 def _decode_body(body):
     return body.decode('utf-8') if isinstance(body, bytes) else body
@@ -119,6 +134,17 @@ def _json_response(data, status="success"):
 
 def _error_response(message):
     return json.dumps({"status": "error", "message": message})
+
+# --- P2P SYNC ---
+def p2p_sync_worker(endpoint, payload):
+    payload['is_sync'] = True
+    data_bytes = json.dumps(payload).encode('utf-8')
+    for peer_port in get_active_peers():
+        if peer_port == CURRENT_PORT: continue
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{peer_port}{endpoint}", data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
+            urllib.request.urlopen(req, timeout=0.5)
+        except: pass
 
 @app.route('/login/', methods=['GET', 'POST'])
 def login(headers="guest", body="anonymous", cookies=None):
@@ -132,11 +158,9 @@ def login(headers="guest", body="anonymous", cookies=None):
             load_db(username) 
             threading.Thread(target=p2p_sync_worker, args=('/sync-user/', {"username": username}), daemon=True).start()
 
-            return (_json_response({
-                "username": username, 
-                "session_id": session_id,
-                "active_nodes": NODE_ADDRESSES 
-            }), [f"session_id={session_id}; Path=/; HttpOnly"])
+            # Set duy nhất 1 Cookie dùng chung
+            set_cookies = [f"session_id={session_id}; Path=/; HttpOnly"]
+            return (_json_response({"username": username, "session_id": session_id}), set_cookies)
         return _error_response("Sai tài khoản")
     except Exception as e: return _error_response(str(e))
 
@@ -188,7 +212,7 @@ def broadcast_peer(headers="guest", body="anonymous", cookies=None):
         msg_ts = data.get('timestamp') or time.time()
         msg_id = data.get('msg_id') or hashlib.md5(f"{from_user}{message}{channel}{uuid.uuid4().hex}".encode()).hexdigest()
 
-        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(DB_DIR) if f.startswith("db_")]
+        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
         for u in all_users:
             db = load_db(u)
             if channel not in db: db[channel] = {"members": [], "messages": []}
@@ -210,7 +234,7 @@ def create_channel(headers="guest", body="anonymous", cookies=None):
     try:
         data = json.loads(_decode_body(body))
         name, creator, is_sync = data.get('name', ''), data.get('creator', ''), data.get('is_sync', False)
-        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(DB_DIR) if f.startswith("db_")]
+        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
         for u in all_users:
             db = load_db(u)
             if name not in db:
@@ -249,10 +273,14 @@ def send_peer(headers="guest", body="anonymous", cookies=None):
 
 @app.route('/get-list/', methods=['GET', 'POST'])
 def get_list(headers="guest", body="anonymous", cookies=None):
-    all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(DB_DIR) if f.startswith("db_")]
+    all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
     peer_list = [{"peer_id": u, "username": u} for u in all_users]
-    return _json_response({"peers": peer_list, "active_nodes": NODE_ADDRESSES})
+    return _json_response({"peers": peer_list})
 
 def create_chatapp(ip, port):
+    global CURRENT_PORT
+    CURRENT_PORT = port
+    print(f" [ChatApp] Node khởi động tại {ip}:{port}")
+    threading.Thread(target=register_to_tracker, daemon=True).start()
     app.prepare_address(ip, port)
     app.run()
