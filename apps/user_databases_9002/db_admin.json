@@ -1,0 +1,49 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "f837ebacf6a872d5d2e4b465aacbe3c7",
+                "from": "admin",
+                "text": "123",
+                "timestamp": 1777468254.9519424,
+                "channel": "general"
+            },
+            {
+                "msg_id": "c7c7b7562428de0d11133162497438ef",
+                "from": "admin",
+                "text": "123\\",
+                "timestamp": 1777479802.3526423,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777639916900-560",
+                "from": "user2",
+                "text": "34",
+                "timestamp": 1777639916.9286373,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644220769-528",
+                "from": "user4",
+                "text": "dgfhgjhk",
+                "timestamp": 1777644220.8080518,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644792470-914",
+                "from": "user2",
+                "text": "sdfg",
+                "timestamp": 1777644792.517314,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777645046667-454",
+                "from": "user2",
+                "text": "cíu",
+                "timestamp": 1777645046.6935215,
+                "channel": "general"
+            }
+        ]
+    }
+}

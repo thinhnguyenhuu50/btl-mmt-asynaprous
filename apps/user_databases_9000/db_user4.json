@@ -1,0 +1,672 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "321f420ce934b680815c4c52be921030",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777518480.215701,
+                "channel": "general"
+            },
+            {
+                "msg_id": "e4a55ff645699d89d8b7de52f56882a3",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777522272.391618,
+                "channel": "general"
+            },
+            {
+                "msg_id": "727fd28c754228dcb8afa84b8301201f",
+                "from": "user2",
+                "text": "444",
+                "timestamp": 1777522275.231399,
+                "channel": "general"
+            },
+            {
+                "msg_id": "be5c29d9915e198972d49561e589d3df",
+                "from": "user2",
+                "text": "💀💀💀💀🙏🙏🙏🙏",
+                "timestamp": 1777522284.0915549,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d8b9b893521fbc82fac60382c0b5a14a",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777522406.938415,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d6539960498f118811229019ff762962",
+                "from": "user2",
+                "text": "🔥🔥🔥🔥🔥",
+                "timestamp": 1777522410.3104413,
+                "channel": "general"
+            },
+            {
+                "msg_id": "56686db937d8e8381475a4082e26ee8b",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777522666.4313734,
+                "channel": "general"
+            },
+            {
+                "msg_id": "cd50a9a60c916c79f1f5d897fafa2ff3",
+                "from": "user2",
+                "text": "❤️❤️❤️❤️❤️❤️❤️❤️❤️🥺🥺🥺🥺🥺",
+                "timestamp": 1777522676.8605065,
+                "channel": "general"
+            },
+            {
+                "msg_id": "aacd3e4718c7f39ae3541752a63c38ad",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777522690.624022,
+                "channel": "general"
+            },
+            {
+                "msg_id": "352e23bbcc259ea5dc30df32e3d3787d",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777522696.941054,
+                "channel": "general"
+            },
+            {
+                "msg_id": "6ee4e842da2bbe14c2826526c27a2ce6",
+                "from": "user3",
+                "text": "44449999",
+                "timestamp": 1777522701.3439958,
+                "channel": "general"
+            },
+            {
+                "msg_id": "1ce0ff064287f6d592073e1ffcab3999",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777522793.494773,
+                "channel": "general"
+            },
+            {
+                "msg_id": "adcc1dd21d9fe33c551834a2c0d9480e",
+                "from": "user3",
+                "text": "💀💀💀💀💀💀",
+                "timestamp": 1777523118.9229553,
+                "channel": "general"
+            },
+            {
+                "msg_id": "9d71e01a577155439ccd52e6884babbb",
+                "from": "user2",
+                "text": "💯💯💯💯💯💯💯",
+                "timestamp": 1777523123.906128,
+                "channel": "general"
+            },
+            {
+                "msg_id": "e2db14cefdef2f987d71083086a575b2",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777523310.8457294,
+                "channel": "general"
+            },
+            {
+                "msg_id": "c9ce82270f4079260c80dcd32c05caa8",
+                "from": "user2",
+                "text": "😊😊😊😊😭😭😭😭👀👀👀👀",
+                "timestamp": 1777523317.6463656,
+                "channel": "general"
+            },
+            {
+                "msg_id": "064ae3f93d1a5bb8e151057b69388db3",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777523798.3102195,
+                "channel": "general"
+            },
+            {
+                "msg_id": "3f9b75785e17644f5a3a185627cdd763",
+                "from": "user3",
+                "text": "124342",
+                "timestamp": 1777523982.8415372,
+                "channel": "general"
+            },
+            {
+                "msg_id": "c7f29b8476275d348adcdad4323d4bc3",
+                "from": "user2",
+                "text": "😊😊😭😭🙌🙌🙌",
+                "timestamp": 1777523988.0950327,
+                "channel": "general"
+            },
+            {
+                "msg_id": "133a7880659e43bd5b38c62f17245d31",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777524130.026555,
+                "channel": "general"
+            },
+            {
+                "msg_id": "96f008effbd2da9d82463a70e9a0bb9c",
+                "from": "user3",
+                "text": "444",
+                "timestamp": 1777524146.8572145,
+                "channel": "general"
+            },
+            {
+                "msg_id": "8f56c074c6e13f538e4b5c9ae1648815",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777524156.5095448,
+                "channel": "general"
+            },
+            {
+                "msg_id": "9bd6d9f2c3b98cb935163bc5d427213d",
+                "from": "user3",
+                "text": "999",
+                "timestamp": 1777524955.9268925,
+                "channel": "general"
+            },
+            {
+                "msg_id": "a1bbcd233c8fb7082cac8555423a6416",
+                "from": "user3",
+                "text": "i999",
+                "timestamp": 1777524978.7458684,
+                "channel": "general"
+            },
+            {
+                "msg_id": "0903df7a6a4e46cbf6774e72e158027e",
+                "from": "user2",
+                "text": "4200",
+                "timestamp": 1777524991.378239,
+                "channel": "general"
+            },
+            {
+                "msg_id": "eb90c531ee33fb1ab80e376241c04d47",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777606785.4202466,
+                "channel": "general"
+            },
+            {
+                "msg_id": "cde742de7a5462aa87bdcd62a3a513d4",
+                "from": "user2",
+                "text": "444",
+                "timestamp": 1777606788.2875247,
+                "channel": "general"
+            },
+            {
+                "msg_id": "a3f10ee34103dde93d1c0f841518c8a9",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777606816.6042848,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d761a1ccd1eeb323dd0a16544b23789e",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777606888.9570742,
+                "channel": "general"
+            },
+            {
+                "msg_id": "90a11b51f8d2c54c7d610d26abc3009c",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777607151.6691186,
+                "channel": "general"
+            },
+            {
+                "msg_id": "e6a3c35e49ae9c8ce50ed8483d610c2e",
+                "from": "user2",
+                "text": "🔥🔥🔥🔥❤️❤️❤️❤️",
+                "timestamp": 1777607162.177489,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777609070276-412",
+                "from": "user2",
+                "text": "444",
+                "timestamp": 1777609070.2954276,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777609081504-997",
+                "from": "user3",
+                "text": "444",
+                "timestamp": 1777609081.5409324,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777609090707-957",
+                "from": "user3",
+                "text": "🤖🤖🤖🤖🤖🤮🤮🤮",
+                "timestamp": 1777609090.7433085,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624979919-579",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624979.9179628,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624981834-636",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624981.8749056,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624982355-117",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624982.3830254,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624982647-987",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624982.6553628,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624982903-211",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624982.9383261,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624983173-60",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624983.1795003,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624983453-458",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624983.4588957,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624983733-149",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624983.7379205,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624984192-566",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624984.2205584,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624984582-822",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624984.5865922,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624984909-580",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624984.9175613,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624985225-730",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624985.244452,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624985563-258",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624985.569261,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624985913-278",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624985.9208474,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624986214-308",
+                "from": "user2",
+                "text": "f",
+                "timestamp": 1777624986.2469115,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624986673-167",
+                "from": "user2",
+                "text": "d",
+                "timestamp": 1777624986.7084618,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624987164-331",
+                "from": "user2",
+                "text": "d",
+                "timestamp": 1777624987.1829486,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624987735-206",
+                "from": "user2",
+                "text": "s",
+                "timestamp": 1777624987.7430859,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624988282-208",
+                "from": "user2",
+                "text": "g",
+                "timestamp": 1777624988.2968063,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777624989021-84",
+                "from": "user2",
+                "text": "h",
+                "timestamp": 1777624989.035579,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777625015553-283",
+                "from": "user3",
+                "text": "đ",
+                "timestamp": 1777625015.5555148,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777625026410-191",
+                "from": "user4",
+                "text": "d",
+                "timestamp": 1777625026.42928,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777625054954-894",
+                "from": "user4",
+                "text": "ssss",
+                "timestamp": 1777625054.9836748,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777632096368-178",
+                "from": "user3",
+                "text": "dd",
+                "timestamp": 1777632096.3927941,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777632533065-585",
+                "from": "user2",
+                "text": "đ",
+                "timestamp": 1777632533.1034482,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777632550459-107",
+                "from": "user3",
+                "text": "d",
+                "timestamp": 1777632550.4955978,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777639704941-906",
+                "from": "user2",
+                "text": "e",
+                "timestamp": 1777639704.9479105,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777639713155-845",
+                "from": "user3",
+                "text": "eee",
+                "timestamp": 1777639713.191603,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777639916900-560",
+                "from": "user2",
+                "text": "34",
+                "timestamp": 1777639916.9286373,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644220769-528",
+                "from": "user4",
+                "text": "dgfhgjhk",
+                "timestamp": 1777644220.8080518,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644792470-914",
+                "from": "user2",
+                "text": "sdfg",
+                "timestamp": 1777644792.517314,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777645046667-454",
+                "from": "user2",
+                "text": "cíu",
+                "timestamp": 1777645046.6935215,
+                "channel": "general"
+            }
+        ]
+    },
+    "123": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "22b630960ca06d19ea8f39269f5a835e",
+                "from": "user2",
+                "text": "999",
+                "timestamp": 1777522796.6755848,
+                "channel": "123"
+            },
+            {
+                "msg_id": "31363103e442d651c73a1a95360dbcc9",
+                "from": "user3",
+                "text": "💀💀💀💀💀💀💀",
+                "timestamp": 1777522803.5384755,
+                "channel": "123"
+            },
+            {
+                "msg_id": "af7f38441003e1c8ded2ee813127bd80",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777522812.2413259,
+                "channel": "123"
+            },
+            {
+                "msg_id": "1b42ee986c63bbf5154f6eeed53707d9",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777523344.5104592,
+                "channel": "123"
+            },
+            {
+                "msg_id": "bc4d2ef4e799fcd36e49330412e7e295",
+                "from": "user3",
+                "text": "999",
+                "timestamp": 1777606803.9706552,
+                "channel": "123"
+            }
+        ]
+    },
+    "4b": {
+        "members": [
+            "user3"
+        ],
+        "messages": [
+            {
+                "msg_id": "cc47df4fc0db818d302d5bcdf412d0b9",
+                "from": "user3",
+                "text": "123",
+                "timestamp": 1777560118.2009773,
+                "channel": "4b"
+            },
+            {
+                "msg_id": "8a07d42a99f834a722093627983e0dd7",
+                "from": "user3",
+                "text": "444",
+                "timestamp": 1777560676.52631,
+                "channel": "4b"
+            },
+            {
+                "msg_id": "67aa04ffe9c6c3804d0e3a3a2d98aed0",
+                "from": "user2",
+                "text": "👍👍👍",
+                "timestamp": 1777560688.5638368,
+                "channel": "4b"
+            },
+            {
+                "msg_id": "9ac933b5705fa88f2bdb3f1bd233cce6",
+                "from": "user3",
+                "text": "4444",
+                "timestamp": 1777606893.0312757,
+                "channel": "4b"
+            }
+        ]
+    },
+    "dm:user2<->user4": {
+        "members": [
+            "user2",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777632820618-173",
+                "from": "user4",
+                "to": "user2",
+                "text": "cíu",
+                "timestamp": 1777632820.6494942
+            },
+            {
+                "msg_id": "msg-1777638822010-964",
+                "from": "user4",
+                "to": "user2",
+                "text": "cíu",
+                "timestamp": 1777638822.0475597
+            },
+            {
+                "msg_id": "msg-1777639726032-918",
+                "from": "user4",
+                "to": "user2",
+                "text": "cíu",
+                "timestamp": 1777639726.0510452
+            },
+            {
+                "msg_id": "msg-1777639925070-520",
+                "from": "user4",
+                "to": "user2",
+                "text": "sos",
+                "timestamp": 1777639925.075546
+            },
+            {
+                "msg_id": "msg-1777640432145-723",
+                "from": "user4",
+                "to": "user2",
+                "text": "sao đây",
+                "timestamp": 1777640432.1518176
+            },
+            {
+                "msg_id": "msg-1777641182847-615",
+                "from": "user4",
+                "to": "user2",
+                "text": "làm sao đây",
+                "timestamp": 1777641182.8834612
+            },
+            {
+                "msg_id": "msg-1777641199400-8",
+                "from": "user2",
+                "to": "user4",
+                "text": "ê được rồi nè",
+                "timestamp": 1777641199.4373903
+            },
+            {
+                "msg_id": "msg-1777644238025-697",
+                "from": "user2",
+                "to": "user4",
+                "text": "fghj",
+                "timestamp": 1777644238.0500429
+            },
+            {
+                "msg_id": "msg-1777644249712-121",
+                "from": "user4",
+                "to": "user2",
+                "text": "oooô4",
+                "timestamp": 1777644249.7464254
+            },
+            {
+                "msg_id": "msg-1777644811061-850",
+                "from": "user4",
+                "to": "user2",
+                "text": "vb",
+                "timestamp": 1777644811.0675154
+            },
+            {
+                "msg_id": "msg-1777645064988-580",
+                "from": "user4",
+                "to": "user2",
+                "text": "ssss",
+                "timestamp": 1777645065.0062144
+            },
+            {
+                "msg_id": "msg-1777645068965-973",
+                "from": "user2",
+                "to": "user4",
+                "text": "sdfghj",
+                "timestamp": 1777645068.9852114
+            }
+        ]
+    },
+    "dm:user3<->user4": {
+        "members": [
+            "user3",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777639765351-713",
+                "from": "user4",
+                "to": "user3",
+                "text": "sao",
+                "timestamp": 1777639765.3542545
+            },
+            {
+                "msg_id": "msg-1777639949516-204",
+                "from": "user3",
+                "to": "user4",
+                "text": "sdfdgfh",
+                "timestamp": 1777639949.5332513
+            },
+            {
+                "msg_id": "msg-1777641208979-796",
+                "from": "user4",
+                "to": "user3",
+                "text": "ngon rồi",
+                "timestamp": 1777641208.9962564
+            },
+            {
+                "msg_id": "msg-1777641215322-257",
+                "from": "user3",
+                "to": "user4",
+                "text": "ok",
+                "timestamp": 1777641215.3288932
+            }
+        ]
+    }
+}

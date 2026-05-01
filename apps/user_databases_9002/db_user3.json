@@ -1,0 +1,198 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "msg-1777639916900-560",
+                "from": "user2",
+                "text": "34",
+                "timestamp": 1777639916.9286373,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644220769-528",
+                "from": "user4",
+                "text": "dgfhgjhk",
+                "timestamp": 1777644220.8080518,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644792470-914",
+                "from": "user2",
+                "text": "sdfg",
+                "timestamp": 1777644792.517314,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777645046667-454",
+                "from": "user2",
+                "text": "cíu",
+                "timestamp": 1777645046.6935215,
+                "channel": "general"
+            }
+        ]
+    },
+    "dm:user2<->user3": {
+        "members": [
+            "user2",
+            "user3"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777639938841-694",
+                "from": "user2",
+                "to": "user3",
+                "text": "sossssssss",
+                "timestamp": 1777639938.857712
+            },
+            {
+                "msg_id": "msg-1777641223024-533",
+                "from": "user3",
+                "to": "user2",
+                "text": "aaaaaaaaaaaaa",
+                "timestamp": 1777641223.0321712
+            },
+            {
+                "msg_id": "msg-1777641231646-227",
+                "from": "user2",
+                "to": "user3",
+                "text": "ok làm UI",
+                "timestamp": 1777641231.688396
+            },
+            {
+                "msg_id": "msg-1777641633306-788",
+                "from": "user2",
+                "to": "user3",
+                "text": "gg",
+                "timestamp": 1777641633.343165
+            },
+            {
+                "msg_id": "msg-1777644228419-182",
+                "from": "user2",
+                "to": "user3",
+                "text": "sdfg",
+                "timestamp": 1777644228.4637854
+            },
+            {
+                "msg_id": "msg-1777644233234-324",
+                "from": "user3",
+                "to": "user2",
+                "text": "fghjk",
+                "timestamp": 1777644233.2638872
+            },
+            {
+                "msg_id": "msg-1777644798430-636",
+                "from": "user2",
+                "to": "user3",
+                "text": "dd",
+                "timestamp": 1777644798.4366372
+            },
+            {
+                "msg_id": "msg-1777644803158-72",
+                "from": "user3",
+                "to": "user2",
+                "text": "ô",
+                "timestamp": 1777644803.1791115
+            },
+            {
+                "msg_id": "msg-1777644837021-913",
+                "from": "user2",
+                "to": "user3",
+                "text": "ssss",
+                "timestamp": 1777644837.0259268
+            },
+            {
+                "msg_id": "msg-1777644845342-989",
+                "from": "user3",
+                "to": "user2",
+                "text": "hhhh",
+                "timestamp": 1777644845.3519232
+            },
+            {
+                "msg_id": "msg-1777645053737-383",
+                "from": "user2",
+                "to": "user3",
+                "text": "sos",
+                "timestamp": 1777645053.744132
+            },
+            {
+                "msg_id": "msg-1777645095209-839",
+                "from": "user2",
+                "to": "user3",
+                "text": "sdf",
+                "timestamp": 1777645095.2138352
+            },
+            {
+                "msg_id": "msg-1777645102648-649",
+                "from": "user3",
+                "to": "user2",
+                "text": "rtgyhu",
+                "timestamp": 1777645102.6638386
+            },
+            {
+                "msg_id": "msg-1777645108285-464",
+                "from": "user3",
+                "to": "user2",
+                "text": "uuuuu",
+                "timestamp": 1777645108.3112245
+            },
+            {
+                "msg_id": "msg-1777645111480-137",
+                "from": "user2",
+                "to": "user3",
+                "text": "fff",
+                "timestamp": 1777645111.5050054
+            },
+            {
+                "msg_id": "msg-1777645140945-402",
+                "from": "user3",
+                "to": "user2",
+                "text": "fghj",
+                "timestamp": 1777645140.97174
+            },
+            {
+                "msg_id": "msg-1777645146711-841",
+                "from": "user2",
+                "to": "user3",
+                "text": "dsfg",
+                "timestamp": 1777645146.735845
+            },
+            {
+                "msg_id": "msg-1777645167822-841",
+                "from": "user3",
+                "to": "user2",
+                "text": "df",
+                "timestamp": 1777645167.8514094
+            },
+            {
+                "msg_id": "msg-1777645170736-616",
+                "from": "user2",
+                "to": "user3",
+                "text": "hhh",
+                "timestamp": 1777645170.7579927
+            }
+        ]
+    },
+    "dm:user3<->user4": {
+        "members": [
+            "user3",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777639949516-204",
+                "from": "user3",
+                "to": "user4",
+                "text": "sdfdgfh",
+                "timestamp": 1777639949.5332513
+            },
+            {
+                "msg_id": "msg-1777641208979-796",
+                "from": "user4",
+                "to": "user3",
+                "text": "ngon rồi",
+                "timestamp": 1777641208.9962564
+            }
+        ]
+    }
+}

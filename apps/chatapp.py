@@ -1,268 +1,296 @@
-"""
-This module implements the hybrid chat application based on AsynapRous.
-It supports both Client-Server paradigm (Tracker for peer registration) 
-and Peer-to-Peer paradigm (Direct chatting).
-"""
+# # Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM.
+# # All rights reserved.
+
+import sys
 import os
 import json
 import time
-import urllib.request
+import socket
 import threading
 import uuid
-from daemon.asynaprous import AsynapRous
-
-# Giả định bạn có module auth.py hỗ trợ xác thực.
-# Nếu bạn chưa tạo file này, bạn có thể comment lại và dùng hàm mock bên dưới
-from daemon.auth import authenticate, create_session 
+import urllib.request
+import hashlib
+from daemon import AsynapRous
+from daemon.auth import (
+    authenticate, create_session, validate_session,
+    get_session_username, build_auth_challenge
+)
 
 app = AsynapRous()
-
+CURRENT_PORT = 9000
+TRACKER_URL = "http://127.0.0.1:80"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TRACKER_FILE = os.path.join(BASE_DIR, "tracker_peers.json")
-DB_DIR = os.path.join(BASE_DIR, "user_databases")
+PUBLIC_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "public"))
 
-if not os.path.exists(DB_DIR):
-    os.makedirs(DB_DIR)
+active_peers_cache = [] 
+last_tracker_sync = 0
 
-# Khởi tạo một Database tạm trên RAM để UI có thể lấy dữ liệu hiển thị
-channels_db = {
-    "general": {"members": [], "messages": []}
-}
+def register_to_tracker():
+    try:
+        data = json.dumps({"port": CURRENT_PORT}).encode('utf-8')
+        req = urllib.request.Request(f"{TRACKER_URL}/register", data=data, headers={'Content-Type': 'application/json'}, method='POST')
+        urllib.request.urlopen(req, timeout=1)
+        print(f" Báo danh Port {CURRENT_PORT} với Tracker thành công!")
+    except:
+        print(f" Tracker sập. Port {CURRENT_PORT} dùng P2P tiếp.")
+
+def get_active_peers():
+    global active_peers_cache, last_tracker_sync
+    if time.time() - last_tracker_sync > 5:
+        try:
+            req = urllib.request.Request(f"{TRACKER_URL}/peers")
+            with urllib.request.urlopen(req, timeout=0.5) as res:
+                data = json.loads(res.read().decode())
+                active_peers_cache = data.get("peers", active_peers_cache)
+        except: 
+            pass
+        finally:
+            last_tracker_sync = time.time()
+    return active_peers_cache
+
+_db_lock = threading.RLock()
+
+def get_db_dir():
+    db_dir = os.path.join(BASE_DIR, f"user_databases_{CURRENT_PORT}")
+    if not os.path.exists(db_dir): os.makedirs(db_dir)
+    return db_dir
+
+def get_session_file():
+    return os.path.join(BASE_DIR, "sessions_global.json")
+
+def save_shared_session(session_id, username):
+    with _db_lock:
+        try:
+            s_file = get_session_file()
+            sessions = {}
+            if os.path.exists(s_file):
+                with open(s_file, 'r', encoding='utf-8') as f: sessions = json.load(f)
+            sessions[session_id] = username
+            with open(f"{s_file}.tmp", 'w', encoding='utf-8') as f: json.dump(sessions, f)
+            os.replace(f"{s_file}.tmp", s_file)
+        except: pass
+
+def get_valid_username(cookies):
+    session_id = cookies.get('session_id')
+    if not session_id: return None
+    username = validate_session(session_id)
+    if username: return username
+    with _db_lock:
+        try:
+            s_file = get_session_file()
+            if os.path.exists(s_file):
+                with open(s_file, 'r', encoding='utf-8') as f: return json.load(f).get(session_id)
+        except: pass
+    return None
+
+def get_db_file(username):
+    return os.path.join(get_db_dir(), f"db_{username}.json")
+
+def load_db(username):
+    if not username: return {"general": {"members": [], "messages": []}}
+    db_file = get_db_file(username)
+    with _db_lock:
+        if not os.path.exists(db_file):
+            data = {"general": {"members": [], "messages": []}}
+            save_db(username, data)
+            return data
+        try:
+            with open(db_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if "general" not in data: data["general"] = {"members": [], "messages": []}
+                return data
+        except: return {"general": {"members": [], "messages": []}}
+
+def save_db(username, data):
+    if not username: return
+    db_file = get_db_file(username)
+    with _db_lock:
+        try:
+            with open(f"{db_file}.tmp", 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            os.replace(f"{db_file}.tmp", db_file) 
+        except: pass
+
+@app.route('/')
+def serve_index(headers, body, cookies=None):
+    try:
+        path = os.path.join(PUBLIC_DIR, "index.html")
+        with open(path, 'r', encoding='utf-8') as f: return f.read()
+    except Exception as e: return f"404: {e}"
+
+@app.route('/(.*\\.(?:css|js))')
+def serve_static(headers, body, cookies=None, file_path=None):
+    try:
+        full_path = os.path.join(PUBLIC_DIR, file_path)
+        with open(full_path, 'r', encoding='utf-8') as f: return f.read()
+    except: return ""
 
 def _decode_body(body):
-    """Decodes the HTTP request body from bytes to string."""
     return body.decode('utf-8') if isinstance(body, bytes) else body
 
 def _json_response(data, status="success"):
-    """Formats a successful JSON response."""
     return json.dumps({"status": status, "data": data})
 
 def _error_response(message):
-    """Formats an error JSON response."""
     return json.dumps({"status": "error", "message": message})
 
-def get_tracker_peers():
-    """Retrieves the list of active peers from the tracker."""
-    try:
-        if os.path.exists(TRACKER_FILE):
-            with open(TRACKER_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
-
-def save_tracker_peers(peers):
-    """Saves the list of active peers to the tracker file."""
-    try:
-        with open(TRACKER_FILE, 'w', encoding='utf-8') as f:
-            json.dump(peers, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        print(f"[Tracker] Error saving peers: {e}")
-
-def fire_and_forget_p2p(req):
-    """Thực thi request P2P trong luồng chạy ngầm để không block tiến trình chính"""
-    try:
-        urllib.request.urlopen(req, timeout=3)
-    except Exception:
-        pass  # Bỏ qua lỗi nếu peer kia offline để không làm sập server
-
-# ==========================================
-# PHASE 1: CLIENT-SERVER PARADIGM (TRACKER)
-# ==========================================
+# --- P2P SYNC ---
+def p2p_sync_worker(endpoint, payload):
+    payload['is_sync'] = True
+    data_bytes = json.dumps(payload).encode('utf-8')
+    for peer_port in get_active_peers():
+        if peer_port == CURRENT_PORT: continue
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{peer_port}{endpoint}", data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
+            urllib.request.urlopen(req, timeout=0.5)
+        except: pass
 
 @app.route('/login/', methods=['GET', 'POST'])
 def login(headers="guest", body="anonymous", cookies=None):
-    """Handles user authentication and session creation."""
     try:
         data = json.loads(_decode_body(body)) if body != "anonymous" else {}
-        username = data.get('username', '')
-        password = data.get('password', '')
-        
+        username, password = data.get('username', ''), data.get('password', '')
         if authenticate(username, password):
             session_id = create_session(username)
-            return (_json_response({
-                "username": username,
-                "message": "Login successful"
-            }), [f"session_id={session_id}; Path=/; HttpOnly"])
-        return _error_response("Invalid credentials")
-    except Exception as e:
-        return _error_response(str(e))
+            save_shared_session(session_id, username)
+            load_db(username)
+            
+            threading.Thread(target=p2p_sync_worker, args=('/sync-user/', {"username": username}), daemon=True).start()
+            set_cookies = [f"session_id={session_id}; Path=/; HttpOnly"]
+            return (_json_response({"username": username, "session_id": session_id}), set_cookies)
+        return _error_response("Sai thông tin đăng nhập")
+    except Exception as e: return _error_response(str(e))
 
 @app.route('/submit-info/', methods=['POST'])
 def submit_info(headers="guest", body="anonymous", cookies=None):
-    """Registers a new peer's IP and port to the centralized tracker."""
+    return _json_response({"status": "ok"})
+
+@app.route('/sync-user/', methods=['POST'])
+def sync_user(headers="guest", body="anonymous", cookies=None):
     try:
         data = json.loads(_decode_body(body))
-        username = data.get('username')
-        ip = data.get('ip')
-        port = data.get('port')
-        
-        if not all([username, ip, port]):
-            return _error_response("Missing peer information")
-            
-        peers = get_tracker_peers()
-        peers[username] = {"ip": ip, "port": port, "last_seen": time.time()}
-        save_tracker_peers(peers)
-        
-        return _json_response({"message": "Peer registered successfully"})
-    except Exception as e:
-        return _error_response(str(e))
+        if data.get('username'): load_db(data.get('username'))
+        return _json_response({"status": "ok"})
+    except: return _error_response("Lỗi Sync User")
 
-@app.route('/get-list/', methods=['GET', 'POST'])
-def get_list(headers="guest", body="anonymous", cookies=None):
-    """Allows peers to discover other active peers from the tracker."""
-    peers_dict = get_tracker_peers()
-    # Chuyển đổi từ dictionary sang dạng mảng JSON cho phía Frontend
-    peers_list = [{"username": k, "ip": v["ip"], "port": v["port"]} for k, v in peers_dict.items()]
-    return _json_response({"peers": peers_list})
-
-# ==========================================
-# CÁC API PHỤC VỤ HIỂN THỊ LÊN GIAO DIỆN CHAT
-# ==========================================
-
-@app.route('/channels/', methods=['GET', 'POST'])
+@app.route('/channels/', methods=['POST', 'GET'])
 def list_channels(headers="guest", body="anonymous", cookies=None):
-    # Lấy tên user đang request danh sách kênh từ frontend
-    data = json.loads(_decode_body(body)) if body != "anonymous" else {}
-    current_user = data.get('username')
-
-    ch_list = []
-    for k, v in channels_db.items():
-        if k.startswith("dm:"):
-            # Nếu là kênh chat cá nhân, tách tên 2 người ra từ chuỗi (vd: user3<->user4)
-            participants = k.replace("dm:", "").split("<->")
-            # Nếu user hiện tại không nằm trong cuộc hội thoại này -> Bỏ qua
-            if current_user and current_user not in participants:
-                continue
-                
-        ch_list.append({
-            "name": k, 
-            "message_count": len(v["messages"]), 
-            "is_dm": k.startswith("dm:")
-        })
+    try:
+        data = json.loads(_decode_body(body)) if body != "anonymous" else {}
+        req_user = data.get('username')
+        username = req_user if req_user else get_valid_username(cookies)
         
-    return _json_response({"channels": ch_list})
+        if not username: return _json_response({"channels": []})
+        db = load_db(username)
+        channel_list = [{"name": n, "member_count": len(i.get("members", [])), 
+                         "message_count": len(i.get("messages", [])), "is_dm": n.startswith('dm:')} 
+                        for n, i in db.items()]
+        return _json_response({"channels": channel_list})
+    except: return _json_response({"channels": []})
 
 @app.route('/messages/', methods=['POST'])
 def fetch_messages(headers="guest", body="anonymous", cookies=None):
-    data = json.loads(_decode_body(body))
-    channel = data.get('channel', 'general')
-    since = float(data.get('since', 0))
-    msgs = channels_db.get(channel, {}).get("messages", [])
-    return _json_response({"messages": [m for m in msgs if m.get("timestamp", 0) > since]})
-
-@app.route('/create-channel/', methods=['POST'])
-def create_channel(headers="guest", body="anonymous", cookies=None):
-    name = json.loads(_decode_body(body)).get('name')
-    if name and name not in channels_db:
-        channels_db[name] = {"members": [], "messages": []}
-    return _json_response({"channel": name})
-
-# ==========================================
-# PHASE 2: PEER-TO-PEER PARADIGM (CHATTING)
-# ==========================================
-
-@app.route('/connect-peer/', methods=['POST'])
-def connect_peer(headers="guest", body="anonymous", cookies=None):
-    """Initializes a direct P2P connection handshake between peers."""
     try:
         data = json.loads(_decode_body(body))
-        from_peer = data.get('from_peer')
-        return _json_response({"message": f"Connection accepted from {from_peer}"})
-    except Exception as e:
-        return _error_response(str(e))
-
-@app.route('/send-peer/', methods=['POST'])
-def send_peer(headers="guest", body="anonymous", cookies=None):
-    """Receives a direct message from another peer without central routing."""
-    try:
-        data = json.loads(_decode_body(body))
-        from_user, to_user, message = data.get('from'), data.get('to'), data.get('message')
-
-        # Tạo ID duy nhất cho tin nhắn để chống trùng lặp
-        msg_id = data.get('msg_id')
-        if not msg_id:
-            msg_id = str(uuid.uuid4())
-            data['msg_id'] = msg_id
-            
-        timestamp = data.get('timestamp') or time.time()
-        data['timestamp'] = timestamp
-
-        print(f"[P2P Direct] Received message from {from_user}: {message}")
-
-        # 1. Lưu tin nhắn vào RAM để hiển thị lên UI
-        dm_id = f"dm:{'<->'.join(sorted([from_user, to_user]))}"
-        if dm_id not in channels_db:
-            channels_db[dm_id] = {"members": [from_user, to_user], "messages": []}
+        channel_name, since_ts = data.get('channel', 'general'), float(data.get('since', 0))
         
-        # Chỉ thêm tin nhắn nếu nó chưa tồn tại (Chống lặp tin)
-        existing_msgs = channels_db[dm_id]["messages"]
-        if not any(m.get('msg_id') == msg_id for m in existing_msgs):
-            msg_data = {"msg_id": msg_id, "from": from_user, "text": message, "timestamp": timestamp}
-            channels_db[dm_id]["messages"].append(msg_data)
-
-        # 2. Logic P2P: Bắn Request ngầm sang IP/Port của Peer khác
-        if not data.get("is_forwarded"):
-            target = get_tracker_peers().get(to_user)
-            if target:
-                url = f"http://{target['ip']}:{target['port']}/send-peer/"
-                data["is_forwarded"] = True
-                req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
-                # Dùng Threading để không chặn luồng chính (Non-blocking)
-                threading.Thread(target=fire_and_forget_p2p, args=(req,), daemon=True).start()
-
-        return _json_response({"message": "Delivered successfully"})
-    except Exception as e:
-        return _error_response(str(e))
+        req_user = data.get('username')
+        username = req_user if req_user else get_valid_username(cookies)
+        
+        if channel_name.startswith("dm:"):
+            members = channel_name.replace("dm:", "").split("<->")
+            if members: username = members[0]
+            if not username: return _json_response({"messages": []})
+        
+        db = load_db(username)
+        msgs = db.get(channel_name, {}).get('messages', [])
+        new_msgs = [m for m in msgs if float(m.get('timestamp', 0)) > since_ts]
+        last_ts = max((float(m.get('timestamp', 0)) for m in new_msgs), default=since_ts)
+        
+        return _json_response({"messages": new_msgs, "typing": [], "reads": {}, "last_ts": last_ts})
+    except: return _json_response({"messages": []})
 
 @app.route('/broadcast-peer/', methods=['POST'])
 def broadcast_peer(headers="guest", body="anonymous", cookies=None):
-    """Receives a broadcast message from a peer and forwards to others."""
     try:
         data = json.loads(_decode_body(body))
-        from_user = data.get('from')
-        message = data.get('message')
-        channel = data.get('channel', 'general')
+        from_user, message, channel = data.get('from', ''), data.get('message', ''), data.get('channel', 'general')
+        is_sync = data.get('is_sync', False)
+        
+        msg_ts = data.get('timestamp') or time.time()
+        msg_id = data.get('msg_id') or hashlib.md5(f"{from_user}{message}{channel}{uuid.uuid4().hex}".encode()).hexdigest()
+        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
+        
+        for u in all_users:
+            if channel.startswith("dm:"):
+                members = channel.replace("dm:", "").split("<->")
+                if u not in members:
+                    continue
+            db = load_db(u)
+            if channel not in db: db[channel] = {"members": [], "messages": []}
+            if not any(m.get('msg_id') == msg_id for m in db[channel]["messages"][-50:]):
+                db[channel]["messages"].append({
+                    "msg_id": msg_id, "from": from_user, "text": message, "timestamp": msg_ts, "channel": channel
+                })
+            save_db(u, db)
+        
+        if not is_sync:
+            data.update({"msg_id": msg_id, "timestamp": msg_ts})
+            threading.Thread(target=p2p_sync_worker, args=('/broadcast-peer/', data), daemon=True).start()
+        return _json_response({"message": "Sent", "msg_id": msg_id})
+    except: return _error_response("Lỗi Broadcast")
 
-        # Tạo ID duy nhất để chống lặp
-        msg_id = data.get('msg_id')
-        if not msg_id:
-            msg_id = str(uuid.uuid4())
-            data['msg_id'] = msg_id
-            
-        timestamp = data.get('timestamp') or time.time()
-        data['timestamp'] = timestamp
+@app.route('/create-channel/', methods=['POST'])
+def create_channel(headers="guest", body="anonymous", cookies=None):
+    try:
+        data = json.loads(_decode_body(body))
+        name, creator, is_sync = data.get('name', ''), data.get('creator', ''), data.get('is_sync', False)
+        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
+        for u in all_users:
+            db = load_db(u)
+            if name not in db:
+                db[name] = {"members": [creator] if creator else [], "messages": []}
+                save_db(u, db)
+        if not is_sync: threading.Thread(target=p2p_sync_worker, args=('/create-channel/', data), daemon=True).start()
+        return _json_response({"channel": name})
+    except: return _error_response("Lỗi Create")
 
-        print(f"[P2P Broadcast] {from_user} broadcasted: {message} in {channel}")
+@app.route('/send-peer/', methods=['POST'])
+def send_peer(headers="guest", body="anonymous", cookies=None):
+    try:
+        data = json.loads(_decode_body(body))
+        from_user, to_user, message = data.get('from', ''), data.get('to', ''), data.get('message', '')
+        is_sync = data.get('is_sync', False)
+        
+        msg_ts = data.get('timestamp') or time.time()
+        msg_id = data.get('msg_id') or hashlib.md5(f"dm|{from_user}{to_user}{message}{uuid.uuid4().hex}".encode()).hexdigest()
+        dm_channel = "dm:{}<->{}".format(*sorted([from_user, to_user]))
+        
+        for u in [from_user, to_user]:
+            db = load_db(u)
+            if dm_channel not in db: db[dm_channel] = {"members": sorted([from_user, to_user]), "messages": []}
+            if not any(m.get('msg_id') == msg_id for m in db[dm_channel]["messages"][-50:]):
+                db[dm_channel]["messages"].append({
+                    "msg_id": msg_id, "from": from_user, "to": to_user, "text": message, "timestamp": msg_ts
+                })
+            save_db(u, db)
+        
+        if not is_sync:
+            data.update({"msg_id": msg_id, "timestamp": msg_ts})
+            threading.Thread(target=p2p_sync_worker, args=('/send-peer/', data), daemon=True).start()
+        return _json_response({"delivered_to": to_user, "channel": dm_channel})
+    except: return _error_response("Lỗi DM")
 
-        # 1. Lưu tin nhắn vào RAM
-        if channel not in channels_db:
-            channels_db[channel] = {"members": [], "messages": []}
-            
-        # Kiểm tra trùng lặp trước khi thêm
-        existing_msgs = channels_db[channel]["messages"]
-        if not any(m.get('msg_id') == msg_id for m in existing_msgs):
-            msg_data = {"msg_id": msg_id, "from": from_user, "text": message, "timestamp": timestamp}
-            channels_db[channel]["messages"].append(msg_data)
-
-        # 2. Logic P2P: Phát (Broadcast) ngầm
-        if not data.get("is_forwarded"):
-            data["is_forwarded"] = True 
-            encoded_data = json.dumps(data).encode('utf-8')
-            active_peers = get_tracker_peers()
-            
-            for peer_username, target in active_peers.items():
-                if peer_username != from_user:
-                    url = f"http://{target['ip']}:{target['port']}/broadcast-peer/"
-                    req = urllib.request.Request(url, data=encoded_data, headers={'Content-Type': 'application/json'})
-                    # Chạy ngầm việc gửi đi để đảm bảo hiệu suất cho người dùng hiện tại
-                    threading.Thread(target=fire_and_forget_p2p, args=(req,), daemon=True).start()
-
-        return _json_response({"message": "Broadcast received & forwarded"})
-    except Exception as e:
-        return _error_response(str(e))
+@app.route('/get-list/', methods=['GET', 'POST'])
+def get_list(headers="guest", body="anonymous", cookies=None):
+    all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
+    peer_list = [{"peer_id": u, "username": u} for u in all_users]
+    return _json_response({"peers": peer_list})
 
 def create_chatapp(ip, port):
-    """Initializes and runs the Chat Application."""
+    global CURRENT_PORT
+    CURRENT_PORT = port
+    print(f" [ChatApp] Node khởi động tại {ip}:{port}")
+    threading.Thread(target=register_to_tracker, daemon=True).start()
     app.prepare_address(ip, port)
     app.run()

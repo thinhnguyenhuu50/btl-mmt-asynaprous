@@ -1,0 +1,21 @@
+{
+    "general": {
+        "members": [],
+        "messages": []
+    },
+    "dm:user2<->user3": {
+        "members": [
+            "user2",
+            "user3"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777632413887-656",
+                "from": "user2",
+                "to": "user3",
+                "text": "dd",
+                "timestamp": 1777632483.440476
+            }
+        ]
+    }
+}

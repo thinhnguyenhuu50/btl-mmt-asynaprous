@@ -1,0 +1,128 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "msg-1777639916900-560",
+                "from": "user2",
+                "text": "34",
+                "timestamp": 1777639916.9286373,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644220769-528",
+                "from": "user4",
+                "text": "dgfhgjhk",
+                "timestamp": 1777644220.8080518,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777644792470-914",
+                "from": "user2",
+                "text": "sdfg",
+                "timestamp": 1777644792.517314,
+                "channel": "general"
+            },
+            {
+                "msg_id": "msg-1777645046667-454",
+                "from": "user2",
+                "text": "cíu",
+                "timestamp": 1777645046.6935215,
+                "channel": "general"
+            }
+        ]
+    },
+    "dm:user2<->user4": {
+        "members": [
+            "user2",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777639925070-520",
+                "from": "user4",
+                "to": "user2",
+                "text": "sos",
+                "timestamp": 1777639925.075546
+            },
+            {
+                "msg_id": "msg-1777641182847-615",
+                "from": "user4",
+                "to": "user2",
+                "text": "làm sao đây",
+                "timestamp": 1777641182.8834612
+            },
+            {
+                "msg_id": "msg-1777641199400-8",
+                "from": "user2",
+                "to": "user4",
+                "text": "ê được rồi nè",
+                "timestamp": 1777641199.4373903
+            },
+            {
+                "msg_id": "msg-1777644238025-697",
+                "from": "user2",
+                "to": "user4",
+                "text": "fghj",
+                "timestamp": 1777644238.0500429
+            },
+            {
+                "msg_id": "msg-1777644249712-121",
+                "from": "user4",
+                "to": "user2",
+                "text": "oooô4",
+                "timestamp": 1777644249.7464254
+            },
+            {
+                "msg_id": "msg-1777644811061-850",
+                "from": "user4",
+                "to": "user2",
+                "text": "vb",
+                "timestamp": 1777644811.0675154
+            },
+            {
+                "msg_id": "msg-1777645064988-580",
+                "from": "user4",
+                "to": "user2",
+                "text": "ssss",
+                "timestamp": 1777645065.0062144
+            },
+            {
+                "msg_id": "msg-1777645118023-89",
+                "from": "user4",
+                "to": "user2",
+                "text": "dfghj",
+                "timestamp": 1777645118.0397174
+            },
+            {
+                "msg_id": "msg-1777645123619-824",
+                "from": "user2",
+                "to": "user4",
+                "text": "dfghj",
+                "timestamp": 1777645123.6242137
+            }
+        ]
+    },
+    "dm:user3<->user4": {
+        "members": [
+            "user3",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "msg-1777639949516-204",
+                "from": "user3",
+                "to": "user4",
+                "text": "sdfdgfh",
+                "timestamp": 1777639949.5332513
+            },
+            {
+                "msg_id": "msg-1777641208979-796",
+                "from": "user4",
+                "to": "user3",
+                "text": "ngon rồi",
+                "timestamp": 1777641208.9962564
+            }
+        ]
+    }
+}

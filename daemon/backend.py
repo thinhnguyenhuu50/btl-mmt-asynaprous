@@ -1,21 +1,12 @@
-"""
-This module provides a backend object to manage and persist backend daemons.
-It implements non-blocking mechanisms (Multi-thread, Callback, Coroutine) 
-for handling incoming HTTP connections.
-"""
-
 import socket
 import threading
 import selectors
 import asyncio
 from .httpadapter import HttpAdapter
 
-MODE = "coroutine"  # Sử dụng coroutine (async/await) theo xu hướng hiệu năng cao
-
-sel = selectors.DefaultSelector()
+MODE = "callback" 
 
 def handle_sync_client(conn, addr, routes):
-    """Handles client connection synchronously using threading."""
     try:
         adapter = HttpAdapter(conn, addr, routes)
         adapter.handle_client()
@@ -24,46 +15,43 @@ def handle_sync_client(conn, addr, routes):
     finally:
         conn.close()
 
-async def handle_async_client(reader, writer, routes):
-    """
-    Handles client connection asynchronously using coroutines.
-    Ensures safe reading of HTTP headers and body without blocking.
-    """
-    addr = writer.get_extra_info('peername')
-    print(f"[Coroutine] Accepted connection from {addr}")
+sel = selectors.DefaultSelector()
+
+def accept_callback(sock, mask, routes):
+    conn, addr = sock.accept()
+    print(f"[Callback] Accepted from {addr}")
+    conn.setblocking(False)
+    sel.register(conn, selectors.EVENT_READ, lambda c, m: handle_callback_read(c, m, addr, routes))
+
+def handle_callback_read(conn, mask, addr, routes):
     try:
-        # Đọc Header cẩn thận
-        headers_data = bytearray()
-        while b'\r\n\r\n' not in headers_data:
-            chunk = await reader.read(4096)
-            if not chunk:
-                break
-            headers_data.extend(chunk)
+        adapter = HttpAdapter(conn, addr, routes)
+        adapter.handle_client()
+    finally:
+        sel.unregister(conn)
+        conn.close()
+
+async def handle_async_client(reader, writer, routes):
+    addr = writer.get_extra_info('peername')
+    print(f"[Coroutine] Accepted from {addr}")
+    try:
+        data = await reader.read(8192)
+        if not data: return
+        
+        if b'\r\n\r\n' in data:
+            headers_part, body_part = data.split(b'\r\n\r\n', 1)
+            content_length = 0
+            for line in headers_part.decode('utf-8', errors='ignore').split('\r\n'):
+                if line.lower().startswith('content-length:'):
+                    try: content_length = int(line.split(':')[1].strip())
+                    except: pass
             
-        if not headers_data:
-            return
+            while len(body_part) < content_length:
+                chunk = await reader.read(8192)
+                if not chunk: break
+                body_part += chunk
+                data += chunk
 
-        headers_part, body_part = headers_data.split(b'\r\n\r\n', 1)
-        
-        # Xác định độ dài Content-Length
-        content_length = 0
-        for line in headers_part.decode('utf-8', errors='ignore').split('\r\n'):
-            if line.lower().startswith('content-length:'):
-                try: 
-                    content_length = int(line.split(':')[1].strip())
-                except ValueError: 
-                    pass
-        
-        # Đọc đủ Body nếu có
-        while len(body_part) < content_length:
-            chunk = await reader.read(8192)
-            if not chunk: 
-                break
-            body_part.extend(chunk)
-
-        full_request_data = headers_part + b'\r\n\r\n' + body_part
-
-        # Tạo một Mock Socket để tương thích với HttpAdapter cũ
         class AsyncSocketMock:
             def __init__(self, full_data):
                 self.full_data = full_data
@@ -72,29 +60,24 @@ async def handle_async_client(reader, writer, routes):
                 chunk = self.full_data[self.pos : self.pos + size]
                 self.pos += size
                 return chunk
-            def sendall(self, content): 
-                writer.write(content)
-            def close(self): 
-                pass
+            def sendall(self, content): writer.write(content)
+            def close(self): pass
 
-        adapter = HttpAdapter(AsyncSocketMock(full_request_data), addr, routes)
+        adapter = HttpAdapter(AsyncSocketMock(data), addr, routes)
         adapter.handle_client()
         await writer.drain()
-        
     except Exception as e:
         print(f"[Coroutine Error] {e}")
     finally:
         writer.close()
+    try:
         await writer.wait_closed()
-
-def create_backend(ip, port, routes=None):
-    """
-    Entry point for creating and running the backend server.
-    """
-    if routes is None:
-        routes = {}
-        
-    print(f"🚀 [Backend] Starting in mode: {MODE.upper()} at {ip}:{port}")
+    except (ConnectionResetError, OSError):
+            # Client hoặc Proxy đã ngắt kết nối thô bạo (WinError 64/10054).
+            # Chúng ta cứ lẳng lặng bỏ qua, không cho crash hệ thống.
+        pass
+def create_backend(ip, port, routes={}):
+    print(f"🚀 [Backend] Đang khởi động chế độ: {MODE.upper()} tại {ip}:{port}")
 
     if MODE == "thread":
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -105,11 +88,22 @@ def create_backend(ip, port, routes=None):
             conn, addr = server.accept()
             threading.Thread(target=handle_sync_client, args=(conn, addr, routes), daemon=True).start()
 
+    elif MODE == "callback":
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((ip, int(port)))
+        server.listen(100)
+        server.setblocking(False)
+        sel.register(server, selectors.EVENT_READ, lambda s, m: accept_callback(s, m, routes))
+        while True:
+            events = sel.select()
+            for key, mask in events:
+                callback = key.data
+                callback(key.fileobj, mask)
+
     elif MODE == "coroutine":
         async def run_async_server():
-            server = await asyncio.start_server(
-                lambda r, w: handle_async_client(r, w, routes), ip, port
-            )
+            server = await asyncio.start_server(lambda r, w: handle_async_client(r, w, routes), ip, port)
             async with server:
                 await server.serve_forever()
         asyncio.run(run_async_server())

@@ -1,6 +1,5 @@
 from .request import Request
 from .response import Response
-from .auth import validate_session, build_auth_challenge
 import asyncio, inspect, json
 
 class HttpAdapter:
@@ -27,32 +26,21 @@ class HttpAdapter:
                     if not chunk: break
                     body_part += chunk
                     raw_data += chunk
+            
+            self.request.prepare(raw_data, self.routes)
+            
+            if self.request.hook:
+                result = self.request.hook(self.request.headers, self.request.body, self.request.cookies)
                 
-                self.request.prepare(raw_data, self.routes)
-                
-                # --- AUTHENTICATION ENFORCEMENT ---
-                protected_routes = ['/channels/', '/messages/', '/create-channel/', '/get-list/', '/send-peer/', '/broadcast-peer/']
-                is_protected = any(self.request.path.startswith(r) for r in protected_routes)
-
-                if is_protected:
-                    session_id = self.request.cookies.get('session_id')
-                    if not session_id or not validate_session(session_id):
-                        self.conn.sendall(build_auth_challenge())
-                        return
-                # ----------------------------------
-                
-                if self.request.hook:
-                    result = self.request.hook(self.request.headers, self.request.body, self.request.cookies)
+                extra_cookies = None
+                if isinstance(result, tuple) and len(result) == 2:
+                    result, extra_cookies = result
                     
-                    extra_cookies = None
-                    if isinstance(result, tuple) and len(result) == 2:
-                        result, extra_cookies = result
-                        
-                    resp_body = json.dumps(result) if isinstance(result, dict) else str(result)
-                    out = self.response.build_json_response(resp_body, extra_cookies)
-                else:
-                    out = self.response.build_response(self.request)
+                resp_body = json.dumps(result) if isinstance(result, dict) else str(result)
+                out = self.response.build_json_response(resp_body, extra_cookies)
+            else:
+                out = self.response.build_response(self.request)
                 
-                self.conn.sendall(out)
+            self.conn.sendall(out)
         except Exception as e: print(f"Adapter Error: {e}")
         finally: self.conn.close()
