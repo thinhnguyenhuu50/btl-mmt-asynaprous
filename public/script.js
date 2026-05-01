@@ -1,10 +1,10 @@
 /**
- * script.js - Tối ưu logic ứng dụng Chat Pro
+ * script.js - Toàn bộ logic ứng dụng Chat Pro
  */
+
 let currentUser = '', sessionId = '', currentChannel = 'general', isDmChannel = false, dmTarget = '';
 let lastTimestamp = 0, pollInterval = null, typingTimer = null;
 let readCounts = {}, previousTotalUnread = 0, isFirstLoad = true;
-let isPolling = false;
 
 // ========================================
 // Helpers & API
@@ -61,12 +61,12 @@ async function doLogin() {
     document.getElementById('user-display').textContent = currentUser;
 
     await api('POST', '/submit-info/', { ip: '127.0.0.1', port: window.location.port || 8000, username: currentUser });
-    
     await refreshChannels(); await refreshPeers(); loadMessages();
+
     if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(() => { pollMessages(); refreshChannels(); refreshPeers(); }, 2000);
+    pollInterval = setInterval(() => { pollMessages(); refreshChannels(); }, 2000);
   } else {
-    document.getElementById('login-error').textContent = result.message || 'Sai tài khoản hoặc mật khẩu!';
+    document.getElementById('login-error').textContent = result.message || 'Sai tài khoản hoặc mật khẩu';
   }
 }
 
@@ -84,18 +84,17 @@ async function refreshChannels() {
     const list = document.getElementById('channel-list'), dmList = document.getElementById('dm-list');
     list.innerHTML = ''; dmList.innerHTML = '';
     let currentTotalUnread = 0;
-    
+
     for (const ch of result.data.channels) {
       if (isFirstLoad || ch.name === currentChannel) readCounts[ch.name] = ch.message_count;
       let unread = Math.max(0, ch.message_count - (readCounts[ch.name] || 0));
       currentTotalUnread += unread;
-      
+
       const div = document.createElement('div');
       div.className = 'channel-item' + (ch.name === currentChannel ? ' active' : '');
       const badgeHtml = unread > 0 ? `<span class="ch-badge unread">${unread} Mới</span>` : `<span class="ch-badge">${ch.message_count}</span>`;
       div.innerHTML = `<span class="ch-name">${ch.is_dm ? '@ ' + getDmPeerName(ch.name) : '# ' + ch.name}</span>${badgeHtml}`;
       div.onclick = () => switchChannel(ch.name);
-      
       if (ch.is_dm) dmList.appendChild(div); else list.appendChild(div);
     }
     isFirstLoad = false;
@@ -128,7 +127,7 @@ async function refreshPeers() {
 }
 
 async function promptCreateChannel() {
-  const channelName = prompt("Nhập tên nhóm mới:");
+  const channelName = prompt("Nhập tên kênh mới:");
   if (!channelName || channelName.trim() === "") return;
   const result = await api('POST', '/create-channel/', { name: channelName.trim(), creator: currentUser });
   if (result.status === 'success') {
@@ -136,40 +135,18 @@ async function promptCreateChannel() {
   } else alert("Lỗi: " + result.message);
 }
 
-async function refreshAll() { await refreshChannels(); await refreshPeers(); showNotification("Cập nhật!"); }
+async function refreshAll() { await refreshChannels(); await refreshPeers(); showNotification("Đã cập nhật!"); }
 
 // ========================================
 // Tin nhắn & Avatar Đã Xem & Đang Gõ
 // ========================================
 async function sendMessage() {
   const input = document.getElementById('msg-input');
-  const text = input.value.trim(); 
-  if (!text) return;
+  const text = input.value.trim(); if (!text) return;
   input.value = '';
-
-  // Xóa khung nhập liệu ngay lập tức
-  // Tạo ID duy nhất từ Frontend dùng chung cho cả UI và Server
-  const uniqueMsgId = 'msg-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-  
-  // 1. Hiển thị ngay lên màn hình (Optimistic UI)
-  const tempMsg = {
-    msg_id: uniqueMsgId, // Sử dụng ID này
-    from: currentUser,
-    text: text,
-    timestamp: Date.now() / 1000
-  };
-  appendMessage(tempMsg);
-
-  // 2. Gửi xuống Server, BẮT BUỘC kèm msg_id để Server không tạo mới
   const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
-  const body = isDmChannel 
-    ? { msg_id: uniqueMsgId, from: currentUser, to: dmTarget, message: text } 
-    : { msg_id: uniqueMsgId, from: currentUser, message: text, channel: currentChannel };
-  
-  // Dùng Promise then() để không đồng bộ
-  api('POST', endpoint, body).then(() => {
-    pollMessages();
-  });
+  const body = isDmChannel ? { from: currentUser, to: dmTarget, message: text } : { from: currentUser, message: text, channel: currentChannel };
+  await api('POST', endpoint, body); await pollMessages();
 }
 
 function handleTyping() {
@@ -184,48 +161,37 @@ function markAsRead() {
 }
 
 async function pollMessages() {
-  if (isPolling) return; // Ngăn chặn xung đột khi đang tải
-  isPolling = true;
-  
-  try {
-    const res = await api('POST', '/messages/', { channel: currentChannel, since: lastTimestamp });
-    if (res.status === 'success') {
-      res.data.messages.forEach(msg => { 
-        appendMessage(msg); 
-        if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; 
-      });
-      
-      markAsRead();
-      
-      // Render Typing
-      const typers = (res.data.typing || []).filter(u => u !== currentUser);
-      document.getElementById('typing-indicator').style.display = typers.length ? 'flex' : 'none';
-      document.getElementById('typing-text').innerText = typers.length ? typers.join(', ') + ' đang gõ' : '';
-      
-      // Render Avatar Messenger Seen
-      document.querySelectorAll('.messenger-seen-row').forEach(el => el.remove());
-      const allMsgs = document.querySelectorAll('.msg');
-      if (allMsgs.length > 0) {
-        const veryLastMsg = allMsgs[allMsgs.length - 1];
-        if (veryLastMsg.dataset.author === currentUser) {
-          const lastTs = parseFloat(veryLastMsg.dataset.timestamp);
-          const readsData = (res.data && res.data.reads) ? res.data.reads : {};
-          const readers = Object.entries(readsData).filter(([u, t]) => u !== currentUser && parseFloat(t) >= lastTs).map(e => e[0]);
-          
-          if (readers.length > 0) {
-            const seenRow = document.createElement('div'); seenRow.className = 'messenger-seen-row';
-            readers.forEach(reader => {
-              const avatar = document.createElement('div'); avatar.className = 'seen-avatar';
-              avatar.innerText = reader.charAt(0).toUpperCase(); avatar.title = 'Đã xem bởi ' + reader;
-              seenRow.appendChild(avatar);
-            });
-            veryLastMsg.appendChild(seenRow);
-          }
+  const res = await api('POST', '/messages/', { channel: currentChannel, since: lastTimestamp });
+  if (res.status === 'success') {
+    res.data.messages.forEach(msg => { appendMessage(msg); if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; });
+    markAsRead(); // Cứ có tin nhắn là tự đánh dấu đã xem
+
+    // Render Typing
+    const typers = (res.data.typing || []).filter(u => u !== currentUser);
+    document.getElementById('typing-indicator').style.display = typers.length ? 'flex' : 'none';
+    document.getElementById('typing-text').innerText = typers.length ? typers.join(', ') + ' đang gõ' : '';
+
+    // Render Avatar Messenger Seen
+    document.querySelectorAll('.messenger-seen-row').forEach(el => el.remove());
+    const allMsgs = document.querySelectorAll('.msg');
+    if (allMsgs.length > 0) {
+      const veryLastMsg = allMsgs[allMsgs.length - 1];
+      if (veryLastMsg.dataset.author === currentUser) {
+        const lastTs = parseFloat(veryLastMsg.dataset.timestamp);
+        const readsData = (res.data && res.data.reads) ? res.data.reads : {};
+        const readers = Object.entries(readsData).filter(([u, t]) => u !== currentUser && parseFloat(t) >= lastTs).map(e => e[0]);
+        
+        if (readers.length > 0) {
+          const seenRow = document.createElement('div'); seenRow.className = 'messenger-seen-row';
+          readers.forEach(reader => {
+            const avatar = document.createElement('div'); avatar.className = 'seen-avatar';
+            avatar.innerText = reader.charAt(0).toUpperCase(); avatar.title = 'Đã xem bởi ' + reader;
+            seenRow.appendChild(avatar);
+          });
+          veryLastMsg.appendChild(seenRow);
         }
       }
     }
-  } finally {
-    isPolling = false; // Mở lại sau khi xử lý xong
   }
 }
 
@@ -236,26 +202,16 @@ async function loadMessages() {
 }
 
 function appendMessage(msg) {
-  // Chống lặp tin nhắn trên giao diện bằng ID duy nhất (hoặc timestamp)
-  const uniqueId = msg.msg_id || msg.timestamp;
-  if (document.querySelector(`.msg[data-id="${uniqueId}"]`)) return;
   const container = document.getElementById('messages');
   const div = document.createElement('div');
+  div.className = 'msg'; div.dataset.author = msg.from; div.dataset.timestamp = msg.timestamp;
   
-  const isSelf = msg.from === currentUser;
-  div.className = isSelf ? 'msg msg-self' : 'msg msg-other';
-  
-  div.dataset.author = msg.from; 
-  div.dataset.timestamp = msg.timestamp;
-  div.dataset.id = uniqueId; // Gắn data-id để kiểm tra trùng lặp
-
   const rawText = msg.text || msg.message || '';
   let contentHtml = '';
-
   if (rawText.match(/\.(png|jpg|jpeg|gif|webp)$/i) || rawText.startsWith('/uploads/') && !rawText.endsWith('.webm')) {
     contentHtml = `<img src="${rawText}" class="msg-image" style="max-width:250px;border-radius:12px;margin-top:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);" onclick="window.open('${rawText}')">`;
   } else if (rawText.match(/\.(pdf|docx|doc|zip|rar)$/i)) {
-    contentHtml = `<a href="${rawText}" target="_blank" class="file-download">Tải xuống: ${rawText.split('/').pop()}</a>`;
+    contentHtml = `<a href="${rawText}" target="_blank" class="file-download">📄 Tải xuống: ${rawText.split('/').pop()}</a>`;
   } else if (rawText.match(/\.(webm|mp3|wav|ogg)$/i)) {
     contentHtml = `<audio controls src="${rawText}"></audio>`;
   } else {
@@ -280,12 +236,11 @@ async function uploadFile() {
 }
 
 let mediaRecorder, audioChunks = [], isRecording = false;
-
 async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream); mediaRecorder.start(); isRecording = true;
-    document.getElementById('btn-mic').classList.add('recording'); showNotification("Đang thu âm...");
+    document.getElementById('btn-mic').classList.add('recording'); showNotification("🎙️ Đang thu âm...");
     mediaRecorder.addEventListener("dataavailable", e => audioChunks.push(e.data));
     mediaRecorder.addEventListener("stop", async () => {
       const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); audioChunks = [];
@@ -308,8 +263,7 @@ function stopRecording() {
 // ========================================
 // Emoji Picker
 // ========================================
-const EMOJIS = ["😀","😂","🥰","😎","🤔","🙄","😴","😷","🥳","🤯","😭","😱","😡","🤢","🤮","🤫","🤝","🙏","👍","👎","👏","🙌","👋","🫶","❤️","💔","🔥","✨","🌟","🎉","💯","👻","👽","🤖"];
-
+const EMOJIS = ["😀","😂","😍","👍","🔥","❤️","✨","🙌","🚀","😭","😊","🥺","😎","🎉","💯","👀","🙏","💀"];
 function initEmojiPicker() {
   const picker = document.getElementById('emoji-picker'); picker.innerHTML = '';
   EMOJIS.forEach(emoji => {
@@ -319,13 +273,12 @@ function initEmojiPicker() {
   });
 }
 initEmojiPicker();
-
 function toggleEmojiPicker() {
   const p = document.getElementById('emoji-picker');
   p.style.display = (p.style.display === 'none' || p.style.display === '') ? 'grid' : 'none';
 }
-
 document.addEventListener('click', function(event) {
   const picker = document.getElementById('emoji-picker'), btn = document.getElementById('btn-emoji-toggle');
   if (picker.style.display === 'grid' && !picker.contains(event.target) && !btn.contains(event.target)) picker.style.display = 'none';
 });
+

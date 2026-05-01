@@ -8,13 +8,6 @@
                 "text": "123",
                 "timestamp": 1777468254.9519424,
                 "channel": "general"
-            },
-            {
-                "msg_id": "c7c7b7562428de0d11133162497438ef",
-                "from": "admin",
-                "text": "123\\",
-                "timestamp": 1777479802.3526423,
-                "channel": "general"
             }
         ]
     }

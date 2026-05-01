@@ -51,3 +51,4 @@ if __name__ == "__main__":
 
     # Prepare and launch the chat application
     create_chatapp(ip, port)
+

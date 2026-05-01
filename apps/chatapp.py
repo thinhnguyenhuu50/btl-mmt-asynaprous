@@ -21,10 +21,13 @@ from daemon.auth import (
 app = AsynapRous()
 CURRENT_PORT = 9000 
 
+# ============================================================
+# LOGIC TRACKER & CACHE DANH BẠ (HYBRID P2P)
+# ============================================================
 TRACKER_URL = "http://127.0.0.1:80"
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PUBLIC_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "public"))
 
+# Thêm Bootstrap Nodes (Danh bạ mồi). 
+# Dù có danh bạ này, vì DB đã bị cách ly, chúng vẫn phải giao tiếp qua HTTP!
 active_peers_cache = [] 
 last_tracker_sync = 0
 
@@ -33,9 +36,9 @@ def register_to_tracker():
         data = json.dumps({"port": CURRENT_PORT}).encode('utf-8')
         req = urllib.request.Request(f"{TRACKER_URL}/register", data=data, headers={'Content-Type': 'application/json'}, method='POST')
         urllib.request.urlopen(req, timeout=1)
-        print(f"✅ Đã báo danh Port {CURRENT_PORT} với Tracker!")
+        print(f"✅ Đã báo danh Port {CURRENT_PORT} với Tracker thành công!")
     except:
-        print(f"⚠️ Tracker sập. Port {CURRENT_PORT} dùng P2P dự phòng.")
+        print(f"⚠️ Tracker (Port 80) sập. Port {CURRENT_PORT} sử dụng danh bạ P2P dự phòng.")
 
 def get_active_peers():
     global active_peers_cache, last_tracker_sync
@@ -49,6 +52,10 @@ def get_active_peers():
         except: pass 
     return active_peers_cache
 
+# ============================================================
+# CƠ SỞ DỮ LIỆU CÁCH LY & XỬ LÝ COOKIE XUNG ĐỘT
+# ============================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _db_lock = threading.RLock()
 
 def get_db_dir():
@@ -57,7 +64,7 @@ def get_db_dir():
     return db_dir
 
 def get_session_file():
-    return os.path.join(BASE_DIR, "sessions_global.json")
+    return os.path.join(BASE_DIR, f"sessions_{CURRENT_PORT}.json")
 
 def save_shared_session(session_id, username):
     with _db_lock:
@@ -67,20 +74,24 @@ def save_shared_session(session_id, username):
             if os.path.exists(s_file):
                 with open(s_file, 'r', encoding='utf-8') as f: sessions = json.load(f)
             sessions[session_id] = username
-            with open(f"{s_file}.tmp", 'w', encoding='utf-8') as f: json.dump(sessions, f)
-            os.replace(f"{s_file}.tmp", s_file)
+            tmp_file = f"{s_file}.tmp"
+            with open(tmp_file, 'w', encoding='utf-8') as f: json.dump(sessions, f)
+            os.replace(tmp_file, s_file)
         except: pass
 
 def get_valid_username(cookies):
-    session_id = cookies.get('session_id') # Lấy chung 1 tên Cookie
+    # SỬA LỖI COOKIE: Tìm đúng Cookie của Port hiện tại
+    session_id = cookies.get(f'session_id_{CURRENT_PORT}') or cookies.get('session_id')
     if not session_id: return None
+    
     username = validate_session(session_id)
     if username: return username
     with _db_lock:
         try:
             s_file = get_session_file()
             if os.path.exists(s_file):
-                with open(s_file, 'r', encoding='utf-8') as f: return json.load(f).get(session_id)
+                with open(s_file, 'r', encoding='utf-8') as f:
+                    return json.load(f).get(session_id)
         except: pass
     return None
 
@@ -105,26 +116,29 @@ def load_db(username):
 def save_db(username, data):
     if not username: return
     db_file = get_db_file(username)
+    tmp_file = f"{db_file}.tmp"
     with _db_lock:
         try:
-            with open(f"{db_file}.tmp", 'w', encoding='utf-8') as f:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-            os.replace(f"{db_file}.tmp", db_file) 
+            os.replace(tmp_file, db_file) 
         except: pass
 
-@app.route('/')
-def serve_index(headers, body, cookies=None):
-    try:
-        path = os.path.join(PUBLIC_DIR, "index.html")
-        with open(path, 'r', encoding='utf-8') as f: return f.read()
-    except Exception as e: return f"404: {e}"
-
-@app.route('/(.*\\.(?:css|js))')
-def serve_static(headers, body, cookies=None, file_path=None):
-    try:
-        full_path = os.path.join(PUBLIC_DIR, file_path)
-        with open(full_path, 'r', encoding='utf-8') as f: return f.read()
-    except: return ""
+# ============================================================
+# GIAO THỨC ĐỒNG BỘ P2P TRỰC TIẾP
+# ============================================================
+def p2p_sync_worker(endpoint, payload):
+    payload['is_sync'] = True
+    data_bytes = json.dumps(payload).encode('utf-8')
+    peers_to_send = get_active_peers()
+    
+    for peer_port in peers_to_send:
+        if peer_port == CURRENT_PORT: continue
+        url = f"http://127.0.0.1:{peer_port}{endpoint}"
+        try:
+            req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
+            urllib.request.urlopen(req, timeout=0.5)
+        except: pass
 
 def _decode_body(body):
     return body.decode('utf-8') if isinstance(body, bytes) else body
@@ -135,17 +149,9 @@ def _json_response(data, status="success"):
 def _error_response(message):
     return json.dumps({"status": "error", "message": message})
 
-# --- P2P SYNC ---
-def p2p_sync_worker(endpoint, payload):
-    payload['is_sync'] = True
-    data_bytes = json.dumps(payload).encode('utf-8')
-    for peer_port in get_active_peers():
-        if peer_port == CURRENT_PORT: continue
-        try:
-            req = urllib.request.Request(f"http://127.0.0.1:{peer_port}{endpoint}", data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
-            urllib.request.urlopen(req, timeout=0.5)
-        except: pass
-
+# ============================================================
+# CÁC ROUTE CHỨC NĂNG CHAT
+# ============================================================
 @app.route('/login/', methods=['GET', 'POST'])
 def login(headers="guest", body="anonymous", cookies=None):
     try:
@@ -158,8 +164,11 @@ def login(headers="guest", body="anonymous", cookies=None):
             load_db(username) 
             threading.Thread(target=p2p_sync_worker, args=('/sync-user/', {"username": username}), daemon=True).start()
 
-            # Set duy nhất 1 Cookie dùng chung
-            set_cookies = [f"session_id={session_id}; Path=/; HttpOnly"]
+            # SỬA LỖI COOKIE: Cấp phát Cookie riêng biệt cho từng Port
+            set_cookies = [
+                f"session_id_{CURRENT_PORT}={session_id}; Path=/; HttpOnly",
+                f"session_id={session_id}; Path=/; HttpOnly"
+            ]
             return (_json_response({"username": username, "session_id": session_id}), set_cookies)
         return _error_response("Sai tài khoản")
     except Exception as e: return _error_response(str(e))
@@ -280,7 +289,7 @@ def get_list(headers="guest", body="anonymous", cookies=None):
 def create_chatapp(ip, port):
     global CURRENT_PORT
     CURRENT_PORT = port
-    print(f" [ChatApp] Node khởi động tại {ip}:{port}")
+    print(f"🚀 [ChatApp] Node khởi động tại {ip}:{port}")
     threading.Thread(target=register_to_tracker, daemon=True).start()
     app.prepare_address(ip, port)
     app.run()

@@ -175,13 +175,11 @@ Request/response bodies use JSON format, making the protocol easy to debug and e
 
 ```bash
 # Terminal 1: Start the chat server
-python start_chatapp.py --server-port 8000
-
-# Terminal 2: (Optional) Start backend for static files
-python start_backend.py --server-port 9000
-
-# Terminal 3: (Optional) Start proxy
 python start_proxy.py --server-port 80
+
+# Terminal 2: (Optional) Start chat app ackend for static files
+ python start_chatapp.py --server-ip 127.0.0.1 --server-port 8001
+# Terminal 3: (Optional) Start proxy
 
 # Open browser
 http://127.0.0.1:8000/chat.html

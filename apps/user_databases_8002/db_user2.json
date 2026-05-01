@@ -1,0 +1,21 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "6941baed5c0e1228a0da9899d7ddc305",
+                "from": "user2",
+                "text": "444",
+                "timestamp": 1777656420.3916845,
+                "channel": "general"
+            },
+            {
+                "msg_id": "c0c3a134a39efb12221296c1d6c10238",
+                "from": "user2",
+                "text": "4444",
+                "timestamp": 1777656423.5488908,
+                "channel": "general"
+            }
+        ]
+    }
+}
