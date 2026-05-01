@@ -177,13 +177,13 @@ Request/response bodies use JSON format, making the protocol easy to debug and e
 # Terminal 1: Start the chat server
 python start_proxy.py
 
-# Terminal 2: (Optional) Start backend for static files
+# Terminal 2: Start backend for static files
 python start_backend.py --server-port 9000
 
-# Terminal 3: (Optional) Start backend for static files
+# Terminal 3: Start backend for static files
 python start_backend.py --server-port 9001
 
-# Terminal 4: (Optional) Start backend for static files
+# Terminal 4: Start backend for static files
 python start_backend.py --server-port 9002
 
 # Terminal 5: 
