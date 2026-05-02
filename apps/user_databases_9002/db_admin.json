@@ -1,0 +1,14 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "f837ebacf6a872d5d2e4b465aacbe3c7",
+                "from": "admin",
+                "text": "123",
+                "timestamp": 1777468254.9519424,
+                "channel": "general"
+            }
+        ]
+    }
+}

@@ -1,0 +1,28 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "d76a8a0cb15b982cf53e9eda3f888e68",
+                "from": "user4",
+                "text": "1",
+                "timestamp": 1777712836.0845306,
+                "channel": "general"
+            },
+            {
+                "msg_id": "53d2f6beabb112300a712c4a9ae5ba81",
+                "from": "user3",
+                "text": "2",
+                "timestamp": 1777712839.2121923,
+                "channel": "general"
+            },
+            {
+                "msg_id": "eecb7237330ac01d25beb31fbc91f817",
+                "from": "user2",
+                "text": "3",
+                "timestamp": 1777712842.2490609,
+                "channel": "general"
+            }
+        ]
+    }
+}

@@ -1,0 +1,436 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "eb2d47c8dbed742f8aa6c492d444d0ba",
+                "from": "user2",
+                "text": "fff",
+                "timestamp": 1777657458.8401368,
+                "channel": "general"
+            },
+            {
+                "msg_id": "b990682b839243e5d6b9c16c6ace2b89",
+                "from": "user4",
+                "text": "dfgj",
+                "timestamp": 1777657463.5613463,
+                "channel": "general"
+            },
+            {
+                "msg_id": "4d71eb9b1daa825de890d11bf9fff5e1",
+                "from": "user3",
+                "text": "cvbnm",
+                "timestamp": 1777657506.6073782,
+                "channel": "general"
+            },
+            {
+                "msg_id": "a05179509d0fd14602b5ad7c28cc92b0",
+                "from": "user4",
+                "text": "dfg",
+                "timestamp": 1777657555.4006271,
+                "channel": "general"
+            },
+            {
+                "msg_id": "a31e1f49a399f00131d5b634fed0ea3a",
+                "from": "user3",
+                "text": "dư",
+                "timestamp": 1777657561.2892206,
+                "channel": "general"
+            },
+            {
+                "msg_id": "318876353803b6fcf931d44886728814",
+                "from": "user2",
+                "text": "456",
+                "timestamp": 1777657566.041988,
+                "channel": "general"
+            },
+            {
+                "msg_id": "2a2fb460d5bb693632728021548aad54",
+                "from": "user2",
+                "text": "aâ",
+                "timestamp": 1777657956.6873794,
+                "channel": "general"
+            },
+            {
+                "msg_id": "b528ed89394be4d5c5580667d6d81495",
+                "from": "user3",
+                "text": "fghj",
+                "timestamp": 1777657961.3604784,
+                "channel": "general"
+            },
+            {
+                "msg_id": "46195bec807cf1d4b68ad683d08c605e",
+                "from": "user4",
+                "text": "999",
+                "timestamp": 1777657965.9268577,
+                "channel": "general"
+            },
+            {
+                "msg_id": "14ea7eb9888c9a11ebe0365803d1de88",
+                "from": "user2",
+                "text": "31243",
+                "timestamp": 1777658186.7523277,
+                "channel": "general"
+            },
+            {
+                "msg_id": "dbf18dee5479905f90f73a31e66d59ba",
+                "from": "user3",
+                "text": "32435",
+                "timestamp": 1777658198.6842563,
+                "channel": "general"
+            },
+            {
+                "msg_id": "682f044d4973ab0b1549bc461031d3e8",
+                "from": "user4",
+                "text": "45677",
+                "timestamp": 1777658204.7682915,
+                "channel": "general"
+            },
+            {
+                "msg_id": "58cfa12540e356442f68c7bdc410b2b5",
+                "from": "user2",
+                "text": "345",
+                "timestamp": 1777658237.2119052,
+                "channel": "general"
+            },
+            {
+                "msg_id": "9941bf266b0619c7591c6abae4e85aec",
+                "from": "user2",
+                "text": "a",
+                "timestamp": 1777658246.069997,
+                "channel": "general"
+            },
+            {
+                "msg_id": "ae906d6ac546c5cdf5ae2561844ddf90",
+                "from": "user3",
+                "text": "b",
+                "timestamp": 1777658249.2470539,
+                "channel": "general"
+            },
+            {
+                "msg_id": "cc4d098b7cefee366784c0027a420861",
+                "from": "user4",
+                "text": "c",
+                "timestamp": 1777658252.4352753,
+                "channel": "general"
+            },
+            {
+                "msg_id": "e8e5e5f3e0d3f6b21cc1d15fae280665",
+                "from": "user4",
+                "text": "ẻt",
+                "timestamp": 1777658363.00464,
+                "channel": "general"
+            },
+            {
+                "msg_id": "f3e0696cf7cf19af893bd7f01d9efcdb",
+                "from": "user2",
+                "text": "32ẻ4t5",
+                "timestamp": 1777658625.0590668,
+                "channel": "general"
+            },
+            {
+                "msg_id": "81c9caa34a51c70a2b5cdd9ef18a1659",
+                "from": "user2",
+                "text": "12",
+                "timestamp": 1777659014.988158,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d861e2fb767045b1abcff7e17f3cbd59",
+                "from": "user2",
+                "text": "678",
+                "timestamp": 1777659021.0670323,
+                "channel": "general"
+            },
+            {
+                "msg_id": "a24fc36741ea3eb5451a8bb85498a68c",
+                "from": "user3",
+                "text": "54346578",
+                "timestamp": 1777659026.0657275,
+                "channel": "general"
+            },
+            {
+                "msg_id": "4b7a8aa6f6e2a4eae0fb8751ea69c045",
+                "from": "user4",
+                "text": "tyuhj",
+                "timestamp": 1777659049.216376,
+                "channel": "general"
+            },
+            {
+                "msg_id": "39db1aba883f851d975414bbd574255e",
+                "from": "user4",
+                "text": "ryhgjhfth",
+                "timestamp": 1777659055.7243812,
+                "channel": "general"
+            },
+            {
+                "msg_id": "9bce7177de970dd10cfae50cb3c34bb6",
+                "from": "user2",
+                "text": "456",
+                "timestamp": 1777659142.5655856,
+                "channel": "general"
+            },
+            {
+                "msg_id": "f986f33ded3c5a5667a2bcb4c9684864",
+                "from": "user3",
+                "text": "34567",
+                "timestamp": 1777659153.8266182,
+                "channel": "general"
+            },
+            {
+                "msg_id": "816343151e6882dbe9ce60ee925f0704",
+                "from": "user4",
+                "text": "5",
+                "timestamp": 1777659158.5375717,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d76a8a0cb15b982cf53e9eda3f888e68",
+                "from": "user4",
+                "text": "1",
+                "timestamp": 1777712836.0845306,
+                "channel": "general"
+            },
+            {
+                "msg_id": "53d2f6beabb112300a712c4a9ae5ba81",
+                "from": "user3",
+                "text": "2",
+                "timestamp": 1777712839.2121923,
+                "channel": "general"
+            },
+            {
+                "msg_id": "eecb7237330ac01d25beb31fbc91f817",
+                "from": "user2",
+                "text": "3",
+                "timestamp": 1777712842.2490609,
+                "channel": "general"
+            }
+        ]
+    },
+    "dm:user2<->user4": {
+        "members": [
+            "user2",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "704b51d4f01a32b6f5d2ab9ccb3f5543",
+                "from": "user4",
+                "to": "user2",
+                "text": "dfg",
+                "timestamp": 1777657484.5745518
+            },
+            {
+                "msg_id": "737a1d33cb6a1842f0e35f8383d7811a",
+                "from": "user2",
+                "to": "user4",
+                "text": "dfgh",
+                "timestamp": 1777657492.3188355
+            },
+            {
+                "msg_id": "c370f19ac61479d69503818a3e892745",
+                "from": "user4",
+                "to": "user2",
+                "text": "ss",
+                "timestamp": 1777657498.014975
+            },
+            {
+                "msg_id": "e82b5df77b06b4b748d117763284ea3a",
+                "from": "user4",
+                "to": "user2",
+                "text": "sdfghj",
+                "timestamp": 1777657571.2526336
+            },
+            {
+                "msg_id": "f08a164aafc8ba512749828ac6d54594",
+                "from": "user2",
+                "to": "user4",
+                "text": "sda",
+                "timestamp": 1777657575.8273182
+            },
+            {
+                "msg_id": "7c32e437c7720be21bb75e039b5fb02a",
+                "from": "user2",
+                "to": "user4",
+                "text": "1234",
+                "timestamp": 1777658008.2913973
+            },
+            {
+                "msg_id": "8f3109fc882e7685cd557ddaedb3bba9",
+                "from": "user4",
+                "to": "user2",
+                "text": "765",
+                "timestamp": 1777658011.8570383
+            },
+            {
+                "msg_id": "70c54e74fdafeba6cc2d13962a3f1534",
+                "from": "user2",
+                "to": "user4",
+                "text": "a",
+                "timestamp": 1777658271.8501968
+            },
+            {
+                "msg_id": "5744e104a3b6c92d86244182989171b8",
+                "from": "user4",
+                "to": "user2",
+                "text": "df",
+                "timestamp": 1777658336.2122173
+            },
+            {
+                "msg_id": "c8784be9fea6598d93e7e068826af9cf",
+                "from": "user4",
+                "to": "user2",
+                "text": "qư",
+                "timestamp": 1777658359.7874324
+            },
+            {
+                "msg_id": "625fd399529fbf618df03bca957a504c",
+                "from": "user2",
+                "to": "user4",
+                "text": "o",
+                "timestamp": 1777659073.778431
+            },
+            {
+                "msg_id": "b772277cea03ead49d3dcc8a87f09788",
+                "from": "user4",
+                "to": "user2",
+                "text": "i",
+                "timestamp": 1777659078.327511
+            },
+            {
+                "msg_id": "8d6c69a589953f2163e556d6ea6a99c3",
+                "from": "user2",
+                "to": "user4",
+                "text": "ưe",
+                "timestamp": 1777659114.1924777
+            },
+            {
+                "msg_id": "65f59e3e04ac596d4868eb2ff49bcec4",
+                "from": "user4",
+                "to": "user2",
+                "text": "3",
+                "timestamp": 1777659118.8336794
+            },
+            {
+                "msg_id": "b4c0df54b50379e7438a65d0e57e3413",
+                "from": "user2",
+                "to": "user4",
+                "text": "4567",
+                "timestamp": 1777712857.365185
+            },
+            {
+                "msg_id": "c9a197ee5539a8c0ba75882946fee5b1",
+                "from": "user4",
+                "to": "user2",
+                "text": "45",
+                "timestamp": 1777712861.1587634
+            },
+            {
+                "msg_id": "047782ef758a870c74da2d763272d936",
+                "from": "user4",
+                "to": "user2",
+                "text": "45",
+                "timestamp": 1777712897.3093421
+            },
+            {
+                "msg_id": "fe24d41211b59a9ab8eccafcc4748844",
+                "from": "user2",
+                "to": "user4",
+                "text": "3",
+                "timestamp": 1777712904.205783
+            }
+        ]
+    },
+    "dm:user3<->user4": {
+        "members": [
+            "user3",
+            "user4"
+        ],
+        "messages": [
+            {
+                "msg_id": "ec3ccb92a68b772547515e28e58440b9",
+                "from": "user3",
+                "to": "user4",
+                "text": "ẻty",
+                "timestamp": 1777657820.6993008
+            },
+            {
+                "msg_id": "568dbd74bbb7ee8ac9ac63918a033306",
+                "from": "user3",
+                "to": "user4",
+                "text": "4567",
+                "timestamp": 1777658019.1494257
+            },
+            {
+                "msg_id": "4dd125be8d087fec129fb20ed81d9f77",
+                "from": "user4",
+                "to": "user3",
+                "text": "45678",
+                "timestamp": 1777658022.9455783
+            },
+            {
+                "msg_id": "cb58eb15882cf73757f0c5d03939b20e",
+                "from": "user4",
+                "to": "user3",
+                "text": "4354678",
+                "timestamp": 1777658067.9572508
+            },
+            {
+                "msg_id": "16871c8b0592f3977efd7e867be50f56",
+                "from": "user3",
+                "to": "user4",
+                "text": "è",
+                "timestamp": 1777659084.4676948
+            },
+            {
+                "msg_id": "af3deb549320b00918154da645d322a2",
+                "from": "user4",
+                "to": "user3",
+                "text": "uu",
+                "timestamp": 1777659088.7002218
+            },
+            {
+                "msg_id": "ba4d84579498b3a0f20646bf41b2c853",
+                "from": "user3",
+                "to": "user4",
+                "text": "6",
+                "timestamp": 1777659131.8466291
+            },
+            {
+                "msg_id": "b941f51d06e414b8e5389d4cc5b6cf38",
+                "from": "user4",
+                "to": "user3",
+                "text": "4",
+                "timestamp": 1777659134.7940722
+            },
+            {
+                "msg_id": "35f330bb4948b1dc83f4296ef6219ae9",
+                "from": "user3",
+                "to": "user4",
+                "text": "45",
+                "timestamp": 1777712867.9051178
+            },
+            {
+                "msg_id": "de0526ff1736145dc04c1f0cf6c8a568",
+                "from": "user4",
+                "to": "user3",
+                "text": "4",
+                "timestamp": 1777712872.004545
+            },
+            {
+                "msg_id": "f9c098da97471bdaf95e8d68071a48dd",
+                "from": "user3",
+                "to": "user4",
+                "text": "5678",
+                "timestamp": 1777712885.4801211
+            },
+            {
+                "msg_id": "77526adb13cb6ae2f4a10080ab60ef76",
+                "from": "user4",
+                "to": "user3",
+                "text": "4",
+                "timestamp": 1777712891.7756195
+            }
+        ]
+    }
+}
