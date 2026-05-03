@@ -1,10 +1,47 @@
 /**
- * script.js - Toàn bộ logic ứng dụng Chat Pro
+ * script.js - Toàn bộ logic ứng dụng Chat Pro 
+ * (Hỗ trợ Base64 Image Paste, Chống chớp nháy, Kênh kín, Left/Right, Light Mode)
  */
 
 let currentUser = '', sessionId = '', currentChannel = 'general', isDmChannel = false, dmTarget = '';
 let lastTimestamp = 0, pollInterval = null, typingTimer = null;
 let readCounts = {}, previousTotalUnread = 0, isFirstLoad = true;
+let pendingImageBase64 = null; 
+
+// ========================================
+// Hỗ trợ Paste (Ctrl+V) ảnh thẳng vào ô chat
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const msgInput = document.getElementById('msg-input');
+    if(msgInput) {
+        msgInput.addEventListener('paste', function (e) {
+            const items = (e.clipboardData || window.clipboardData).items;
+            for (let index in items) {
+                const item = items[index];
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const blob = item.getAsFile();
+                    if (blob.size > 2 * 1024 * 1024) {
+                        alert("Kích thước ảnh quá lớn, vui lòng dán ảnh < 2MB!");
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        pendingImageBase64 = event.target.result;
+                        msgInput.value = '[🖼️ Đã dán 1 ảnh - Nhấn Enter để gửi]';
+                    };
+                    reader.readAsDataURL(blob);
+                    e.preventDefault(); 
+                }
+            }
+        });
+
+        msgInput.addEventListener('input', function(e) {
+            if (pendingImageBase64 && !msgInput.value.includes('Nhấn Enter để gửi')) {
+                pendingImageBase64 = null; 
+            }
+        });
+    }
+});
 
 // ========================================
 // Helpers & API
@@ -64,7 +101,7 @@ async function doLogin() {
     await refreshChannels(); await refreshPeers(); loadMessages();
 
     if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(() => { pollMessages(); refreshChannels(); }, 2000);
+    pollInterval = setInterval(() => { pollMessages(); refreshChannels(); refreshPeers(); }, 2000);
   } else {
     document.getElementById('login-error').textContent = result.message || 'Sai tài khoản hoặc mật khẩu';
   }
@@ -93,7 +130,11 @@ async function refreshChannels() {
       const div = document.createElement('div');
       div.className = 'channel-item' + (ch.name === currentChannel ? ' active' : '');
       const badgeHtml = unread > 0 ? `<span class="ch-badge unread">${unread} Mới</span>` : `<span class="ch-badge">${ch.message_count}</span>`;
-      div.innerHTML = `<span class="ch-name">${ch.is_dm ? '@ ' + getDmPeerName(ch.name) : '# ' + ch.name}</span>${badgeHtml}`;
+      
+      const lockIcon = ch.is_private ? ' 🔒' : '';
+      const channelDisplayName = ch.is_dm ? '@ ' + getDmPeerName(ch.name) : '# ' + ch.name + lockIcon;
+
+      div.innerHTML = `<span class="ch-name">${channelDisplayName}</span>${badgeHtml}`;
       div.onclick = () => switchChannel(ch.name);
       if (ch.is_dm) dmList.appendChild(div); else list.appendChild(div);
     }
@@ -115,33 +156,95 @@ function getDmPeerName(n) { return n.substring(3).split('<->').find(u => u !== c
 async function refreshPeers() {
   const result = await api('GET', '/get-list/');
   if (result.status === 'success') {
-    const list = document.getElementById('peer-list'); list.innerHTML = '';
+    const list = document.getElementById('peer-list');
+    
+    let existingNodes = {};
+    list.querySelectorAll('.peer-item').forEach(el => { existingNodes[el.dataset.username] = el; });
+
     for (const peer of result.data.peers) {
       if (peer.username === currentUser) continue;
-      const div = document.createElement('div'); div.className = 'peer-item';
-      div.innerHTML = `<span class="dot"></span>${peer.username}`;
-      div.onclick = () => { switchChannel('dm:' + [currentUser, peer.username].sort().join('<->')); showNotification('Nhắn tin với ' + peer.username); };
-      list.appendChild(div);
+      const dotColor = peer.is_online ? '#2ecc71' : '#e74c3c'; 
+      
+      if (existingNodes[peer.username]) {
+          existingNodes[peer.username].querySelector('.dot').style.backgroundColor = dotColor;
+          existingNodes[peer.username].querySelector('.dot').style.borderColor = dotColor;
+          delete existingNodes[peer.username]; 
+      } else {
+          const div = document.createElement('div'); 
+          div.className = 'peer-item'; div.dataset.username = peer.username;
+          div.innerHTML = `<span class="dot" style="background-color: ${dotColor}; border-color: ${dotColor};"></span> <span style="margin-left: 8px;">${peer.username}</span>`;
+          div.onclick = () => { switchChannel('dm:' + [currentUser, peer.username].sort().join('<->')); showNotification('Nhắn tin với ' + peer.username); };
+          list.appendChild(div);
+      }
     }
+    Object.values(existingNodes).forEach(el => el.remove());
   }
 }
 
 async function promptCreateChannel() {
   const channelName = prompt("Nhập tên kênh mới:");
   if (!channelName || channelName.trim() === "") return;
-  const result = await api('POST', '/create-channel/', { name: channelName.trim(), creator: currentUser });
+  
+  const isPrivate = confirm("Bạn có muốn đặt kênh này làm Kênh Kín (Private) không?\nOK = Có, Cancel = Không (Public)");
+  let allowedMembers = [currentUser];
+  
+  if (isPrivate) {
+      const membersStr = prompt("Nhập TÊN CÁC THÀNH VIÊN được phép vào (cách nhau bằng dấu phẩy):\nVí dụ: user2, user3", currentUser);
+      if (membersStr) {
+          allowedMembers = membersStr.split(',').map(s => s.trim()).filter(s => s);
+          if (!allowedMembers.includes(currentUser)) allowedMembers.push(currentUser); 
+      }
+  }
+
+  const result = await api('POST', '/create-channel/', { 
+      name: channelName.trim(), 
+      creator: currentUser,
+      is_private: isPrivate,
+      allowed_members: allowedMembers
+  });
+  
+  if (result.status === 'success') { await refreshChannels(); switchChannel(result.data.channel); } 
+  else alert("Lỗi: " + result.message);
+}
+
+async function promptAddPeer() {
+  const peerPort = prompt("🚨 TRACKER ĐANG SẬP?\nNhập Port của Peer bạn muốn kết nối thủ công (VD: 9001):");
+  if (!peerPort || isNaN(peerPort)) return;
+  
+  const peerName = prompt(`Nhập tên định danh của Port ${peerPort} (VD: user2):`);
+  if (!peerName) return;
+
+  const result = await api('POST', '/add-list/', { port: parseInt(peerPort), username: peerName.trim() });
+  
   if (result.status === 'success') {
-    await refreshChannels(); switchChannel(result.data.channel); 
-  } else alert("Lỗi: " + result.message);
+    showNotification(result.message);
+    await api('POST', '/connect-peer/', { port: parseInt(peerPort) });
+    refreshPeers(); 
+  } else {
+    alert("Lỗi: " + result.message);
+  }
 }
 
 async function refreshAll() { await refreshChannels(); await refreshPeers(); showNotification("Đã cập nhật!"); }
 
 // ========================================
-// Tin nhắn & Avatar Đã Xem & Đang Gõ
+// Tin nhắn & Hình ảnh
 // ========================================
 async function sendMessage() {
   const input = document.getElementById('msg-input');
+  
+  if (pendingImageBase64) {
+      const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
+      const body = isDmChannel ? { from: currentUser, to: dmTarget, message: pendingImageBase64 } : { from: currentUser, message: pendingImageBase64, channel: currentChannel };
+      
+      pendingImageBase64 = null; 
+      input.value = '';
+      
+      await api('POST', endpoint, body); 
+      await pollMessages();
+      return;
+  }
+
   const text = input.value.trim(); if (!text) return;
   input.value = '';
   const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
@@ -164,14 +267,12 @@ async function pollMessages() {
   const res = await api('POST', '/messages/', { channel: currentChannel, since: lastTimestamp });
   if (res.status === 'success') {
     res.data.messages.forEach(msg => { appendMessage(msg); if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; });
-    markAsRead(); // Cứ có tin nhắn là tự đánh dấu đã xem
+    markAsRead(); 
 
-    // Render Typing
     const typers = (res.data.typing || []).filter(u => u !== currentUser);
     document.getElementById('typing-indicator').style.display = typers.length ? 'flex' : 'none';
     document.getElementById('typing-text').innerText = typers.length ? typers.join(', ') + ' đang gõ' : '';
 
-    // Render Avatar Messenger Seen
     document.querySelectorAll('.messenger-seen-row').forEach(el => el.remove());
     const allMsgs = document.querySelectorAll('.msg');
     if (allMsgs.length > 0) {
@@ -204,11 +305,17 @@ async function loadMessages() {
 function appendMessage(msg) {
   const container = document.getElementById('messages');
   const div = document.createElement('div');
-  div.className = 'msg'; div.dataset.author = msg.from; div.dataset.timestamp = msg.timestamp;
+  
+  // KIỂM TRA TRÁI / PHẢI
+  const isMe = (msg.from === currentUser);
+  div.className = `msg ${isMe ? 'me' : 'other'}`; 
+  div.dataset.author = msg.from; 
+  div.dataset.timestamp = msg.timestamp;
   
   const rawText = msg.text || msg.message || '';
   let contentHtml = '';
-  if (rawText.match(/\.(png|jpg|jpeg|gif|webp)$/i) || rawText.startsWith('/uploads/') && !rawText.endsWith('.webm')) {
+  
+  if (rawText.startsWith('data:image/') || rawText.match(/\.(png|jpg|jpeg|gif|webp)$/i) || rawText.startsWith('/uploads/')) {
     contentHtml = `<img src="${rawText}" class="msg-image" style="max-width:250px;border-radius:12px;margin-top:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);" onclick="window.open('${rawText}')">`;
   } else if (rawText.match(/\.(pdf|docx|doc|zip|rar)$/i)) {
     contentHtml = `<a href="${rawText}" target="_blank" class="file-download">📄 Tải xuống: ${rawText.split('/').pop()}</a>`;
@@ -218,20 +325,34 @@ function appendMessage(msg) {
     contentHtml = `<div class="msg-text">${escapeHtml(rawText)}</div>`;
   }
 
-  div.innerHTML = `<div class="msg-meta"><span class="msg-author">${msg.from || 'unknown'}</span><span class="msg-time">${formatTime(msg.timestamp)}</span></div>${contentHtml}`;
+  div.innerHTML = `<div class="msg-meta"><span class="msg-author">${isMe ? 'Bạn' : (msg.from || 'unknown')}</span><span class="msg-time">${formatTime(msg.timestamp)}</span></div>${contentHtml}`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
 
 // ========================================
-// Upload File & Voice Record
+// Upload File (Chuyển sang Base64) & Voice
 // ========================================
 async function uploadFile() {
-  const fileInput = document.getElementById('file-picker'); if (fileInput.files.length === 0) return;
-  const file = fileInput.files[0]; showNotification('Đang tải: ' + file.name);
-  const resp = await fetch('/upload/', { method: 'POST', headers: { 'X-File-Name': file.name, 'Content-Type': file.type || 'application/octet-stream' }, body: file });
-  const result = await resp.json();
-  if (result.status === 'success') { await api('POST', '/broadcast-peer/', { from: currentUser, message: result.url, channel: currentChannel }); pollMessages(); }
+  const fileInput = document.getElementById('file-picker'); 
+  if (fileInput.files.length === 0) return;
+  const file = fileInput.files[0]; 
+  
+  if (file.size > 2 * 1024 * 1024) {
+      alert("Vui lòng chọn ảnh nhỏ hơn 2MB để hệ thống P2P chạy ổn định!");
+      return;
+  }
+  
+  showNotification('Đang gửi ảnh...');
+  const reader = new FileReader();
+  reader.onloadend = async function() {
+    const base64String = reader.result;
+    const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
+    const body = isDmChannel ? { from: currentUser, to: dmTarget, message: base64String } : { from: currentUser, message: base64String, channel: currentChannel };
+    await api('POST', endpoint, body); 
+    await pollMessages();
+  };
+  reader.readAsDataURL(file); 
   fileInput.value = '';
 }
 
@@ -282,3 +403,26 @@ document.addEventListener('click', function(event) {
   if (picker.style.display === 'grid' && !picker.contains(event.target) && !btn.contains(event.target)) picker.style.display = 'none';
 });
 
+// ========================================
+// NÚT SÁNG/TỐI TỰ ĐỘNG
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebarFooter = document.querySelector('.sidebar-footer');
+    if (sidebarFooter) {
+        const themeBtn = document.createElement('button');
+        themeBtn.className = 'btn-ghost';
+        themeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg> Giao diện Sáng/Tối`;
+        
+        themeBtn.onclick = () => {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            localStorage.setItem('theme_preference', isLight ? 'light' : 'dark');
+        };
+        
+        sidebarFooter.appendChild(themeBtn);
+        
+        if (localStorage.getItem('theme_preference') === 'light') {
+            document.body.classList.add('light-mode');
+        }
+    }
+});

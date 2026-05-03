@@ -21,23 +21,11 @@ from daemon import AsynapRous
 app = AsynapRous()
 
 @app.route('/login', methods=['POST'])
-def login(headers="guest", body="anonymous", cookies=None): # <--- Đã thêm tham số cookies
+def login(headers="guest", body="anonymous", cookies=None): 
     """
     Handle user login via POST request.
     """
     print("[SampleApp] Logging in {} to {}".format(headers, body))
-    
-    # -------------------------------------------------------------
-    # GỢI Ý CHO ĐỒ ÁN (MULTI-SESSION & MULTI-BACKEND):
-    # Thay vì chỉ trả về thông báo, bạn có thể cấp Session ID tại đây!
-    # Từ file auth.py, bạn import hàm create_session:
-    # 
-    # session_id = create_session("admin") # Giả sử đăng nhập thành công
-    # extra_cookies = [f"session={session_id}"]
-    # data = {"message": "Login Success", "username": "admin"}
-    # return (json.dumps(data).encode("utf-8"), extra_cookies) # Trả về tuple 2 phần tử
-    # -------------------------------------------------------------
-    
     data = {"message": "Welcome to the RESTful TCP WebApp"}
     json_str = json.dumps(data)
     return json_str.encode("utf-8")

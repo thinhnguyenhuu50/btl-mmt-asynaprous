@@ -11,6 +11,18 @@
 
 body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; }
 
+/* ===== LIGHT MODE (GIAO DIỆN SÁNG) ===== */
+body.light-mode {
+  --bg-body: #F3F4F6; 
+  --bg-card: #FFFFFF; 
+  --bg-input: #F9FAFB; 
+  --bg-hover: #E5E7EB;
+  --text-main: #1F2937; 
+  --text-muted: #6B7280; 
+  --border-color: rgba(0, 0, 0, 0.1);
+}
+body.light-mode .twilight-bg { display: none; }
+
 .twilight-bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
 .aurora { position: absolute; filter: blur(90px); opacity: 0.15; border-radius: 50%; animation: float 20s ease-in-out infinite; }
 .aurora-1 { width: 600px; height: 600px; background: #818CF8; top: -100px; left: -100px; }
@@ -63,14 +75,23 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-
 .header-title .hash { color: var(--text-muted); font-weight: 400; font-size: 20px; }
 
 .messages { flex: 1; padding: 28px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
-.msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 75%; animation: fadeIn 0.2s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .msg-meta { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .msg-author { font-weight: 600; font-size: 14.5px; color: var(--accent); }
 .msg-time { font-size: 12px; color: var(--text-muted); }
-.msg-text { background: var(--bg-hover); padding: 12px 18px; border-radius: 4px 16px 16px 16px; font-size: 15px; line-height: 1.55; color: var(--text-main); }
+.msg-text { padding: 12px 18px; font-size: 15px; line-height: 1.55; }
 .msg-image { max-width: 320px; border-radius: 12px; margin-top: 6px; cursor: pointer; border: 1px solid var(--border-color); }
 .file-download { display: inline-block; padding: 12px 18px; border-radius: 10px; margin-top: 6px; background: var(--bg-hover); border: 1px solid var(--border-color); color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 500; }
+
+/* ===== CHIA TIN NHẮN TRÁI / PHẢI ===== */
+.msg { display: flex; flex-direction: column; max-width: 75%; animation: fadeIn 0.2s ease-out; width: fit-content; }
+.msg.other { align-self: flex-start; align-items: flex-start; }
+.msg.other .msg-text { background: var(--bg-hover); border-radius: 4px 16px 16px 16px; color: var(--text-main); }
+
+.msg.me { align-self: flex-end; align-items: flex-end; }
+.msg.me .msg-meta { flex-direction: row-reverse; }
+.msg.me .msg-text { background: var(--accent); color: #ffffff; border-radius: 16px 4px 16px 16px; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 .input-wrapper { padding: 24px 28px; }
 .input-box { display: flex; align-items: center; gap: 12px; background: var(--bg-input); border: 1px solid var(--border-color); padding: 8px 12px 8px 16px; border-radius: 16px; }
@@ -93,11 +114,9 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-
 .emoji-item { font-size: 22px; text-align: center; cursor: pointer; padding: 6px 0; border-radius: 10px; transition: 0.2s; user-select: none; }
 .emoji-item:hover { background: var(--bg-hover); transform: scale(1.1); }
 
-/* ===== UNREAD BADGE ===== */
+/* ===== UNREAD BADGE & TYPING ===== */
 .ch-badge.unread { background: #F43F5E !important; color: #fff !important; box-shadow: 0 0 10px rgba(244, 63, 94, 0.6); font-weight: 700; padding: 4px 10px; border-radius: 12px; animation: pulseAlert 2s infinite; }
 @keyframes pulseAlert { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-
-/* ===== TYPING INDICATOR ===== */
 .typing-indicator { padding: 0 28px 12px; font-size: 13.5px; color: var(--accent); font-weight: 500; display: flex; align-items: center; gap: 6px; }
 .typing-dots { display: flex; gap: 4px; padding-top: 4px; }
 .typing-dots .dot { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; }

@@ -4,7 +4,7 @@ import selectors
 import asyncio
 from .httpadapter import HttpAdapter
 
-MODE = "callback" 
+MODE = "thread" 
 
 def handle_sync_client(conn, addr, routes):
     try:
@@ -73,7 +73,7 @@ async def handle_async_client(reader, writer, routes):
         await writer.wait_closed()
 
 def create_backend(ip, port, routes={}):
-    print(f"🚀 [Backend] Đang khởi động chế độ: {MODE.upper()} tại {ip}:{port}")
+    print(f" [Backend] Đang khởi động chế độ: {MODE.upper()} tại {ip}:{port}")
 
     if MODE == "thread":
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
