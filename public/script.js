@@ -1,12 +1,18 @@
 /**
- * script.js - Toàn bộ logic ứng dụng Chat Pro 
- * (Hỗ trợ Base64 Image Paste, Chống chớp nháy, Kênh kín, Left/Right, Light Mode)
+ * script.js - Phiên bản Tối Thượng (Rewind Polling + Queue Delay + Lọc Rác)
+ * Xử lý dứt điểm 100% lỗi mất tin nhắn do trùng Timestamp ở Backend.
  */
+
+const BASE_URL = window.location.origin; 
 
 let currentUser = '', sessionId = '', currentChannel = 'general', isDmChannel = false, dmTarget = '';
 let lastTimestamp = 0, pollInterval = null, typingTimer = null;
 let readCounts = {}, previousTotalUnread = 0, isFirstLoad = true;
 let pendingImageBase64 = null; 
+
+let isPolling = false; 
+let sendQueue = [];
+let isSending = false;
 
 // ========================================
 // Hỗ trợ Paste (Ctrl+V) ảnh thẳng vào ô chat
@@ -46,13 +52,32 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========================================
 // Helpers & API
 // ========================================
-async function api(method, path, body) {
-  const opts = { method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
-  if (body) opts.body = JSON.stringify(body);
+async function api(method, path, body = null) {
+  const savedSid = localStorage.getItem('chat_session_id');
+  const opts = { 
+      method: method, 
+      headers: { 'Content-Type': 'application/json' }
+  };
+  
+  if (savedSid) {
+      opts.headers['X-Session-Id'] = savedSid;
+      opts.headers['Authorization'] = `Bearer ${savedSid}`;
+  }
+
+  if (body) {
+      if (savedSid) body.session_id = savedSid;
+      opts.body = JSON.stringify(body);
+  } else if (method !== 'GET' && method !== 'HEAD' && savedSid) {
+      opts.body = JSON.stringify({ session_id: savedSid });
+  }
+
   try {
-    const resp = await fetch(path, opts);
+    const resp = await fetch(BASE_URL + path, opts);
     return JSON.parse(await resp.text());
-  } catch (e) { return { status: 'error', message: e.message }; }
+  } catch (e) { 
+    console.error(`🚨 Lỗi API [${path}]:`, e.message);
+    return { status: 'error', message: e.message }; 
+  }
 }
 
 function showNotification(msg) {
@@ -92,13 +117,22 @@ async function doLogin() {
 
   const result = await api('POST', '/login/', { username, password });
   if (result.status === 'success') {
-    currentUser = result.data.username; sessionId = result.data.session_id;
+    currentUser = result.data.username; 
+    sessionId = result.data.session_id;
+    
+    localStorage.setItem('chat_session_id', sessionId);
+    localStorage.setItem('chat_username', currentUser);
+    
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('chat-screen').style.display = 'flex';
     document.getElementById('user-display').textContent = currentUser;
 
-    await api('POST', '/submit-info/', { ip: '127.0.0.1', port: window.location.port || 8000, username: currentUser });
-    await refreshChannels(); await refreshPeers(); loadMessages();
+    const currentPort = window.location.port || 80;
+    await api('POST', '/submit-info/', { ip: window.location.hostname, port: parseInt(currentPort), username: currentUser });
+    
+    await refreshChannels(); 
+    await refreshPeers(); 
+    loadMessages();
 
     if (pollInterval) clearInterval(pollInterval);
     pollInterval = setInterval(() => { pollMessages(); refreshChannels(); refreshPeers(); }, 2000);
@@ -108,7 +142,8 @@ async function doLogin() {
 }
 
 function doLogout() {
-  document.cookie = 'session_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  localStorage.removeItem('chat_session_id');
+  localStorage.removeItem('chat_username');
   location.reload();
 }
 
@@ -123,6 +158,8 @@ async function refreshChannels() {
     let currentTotalUnread = 0;
 
     for (const ch of result.data.channels) {
+      if (ch.name.includes('.tmp')) continue;
+
       if (isFirstLoad || ch.name === currentChannel) readCounts[ch.name] = ch.message_count;
       let unread = Math.max(0, ch.message_count - (readCounts[ch.name] || 0));
       currentTotalUnread += unread;
@@ -157,12 +194,12 @@ async function refreshPeers() {
   const result = await api('GET', '/get-list/');
   if (result.status === 'success') {
     const list = document.getElementById('peer-list');
-    
     let existingNodes = {};
     list.querySelectorAll('.peer-item').forEach(el => { existingNodes[el.dataset.username] = el; });
 
     for (const peer of result.data.peers) {
-      if (peer.username === currentUser) continue;
+      if (peer.username === currentUser || peer.username.includes('.tmp')) continue;
+      
       const dotColor = peer.is_online ? '#2ecc71' : '#e74c3c'; 
       
       if (existingNodes[peer.username]) {
@@ -184,10 +221,8 @@ async function refreshPeers() {
 async function promptCreateChannel() {
   const channelName = prompt("Nhập tên kênh mới:");
   if (!channelName || channelName.trim() === "") return;
-  
   const isPrivate = confirm("Bạn có muốn đặt kênh này làm Kênh Kín (Private) không?\nOK = Có, Cancel = Không (Public)");
   let allowedMembers = [currentUser];
-  
   if (isPrivate) {
       const membersStr = prompt("Nhập TÊN CÁC THÀNH VIÊN được phép vào (cách nhau bằng dấu phẩy):\nVí dụ: user2, user3", currentUser);
       if (membersStr) {
@@ -195,61 +230,66 @@ async function promptCreateChannel() {
           if (!allowedMembers.includes(currentUser)) allowedMembers.push(currentUser); 
       }
   }
-
-  const result = await api('POST', '/create-channel/', { 
-      name: channelName.trim(), 
-      creator: currentUser,
-      is_private: isPrivate,
-      allowed_members: allowedMembers
-  });
-  
-  if (result.status === 'success') { await refreshChannels(); switchChannel(result.data.channel); } 
-  else alert("Lỗi: " + result.message);
+  const result = await api('POST', '/create-channel/', { name: channelName.trim(), creator: currentUser, is_private: isPrivate, allowed_members: allowedMembers });
+  if (result.status === 'success') { await refreshChannels(); switchChannel(result.data.channel); } else alert("Lỗi: " + result.message);
 }
 
 async function promptAddPeer() {
-  const peerPort = prompt("🚨 TRACKER ĐANG SẬP?\nNhập Port của Peer bạn muốn kết nối thủ công (VD: 9001):");
+  const peerPort = prompt("🚨 Nhập Port của Peer bạn muốn kết nối thủ công:");
   if (!peerPort || isNaN(peerPort)) return;
-  
-  const peerName = prompt(`Nhập tên định danh của Port ${peerPort} (VD: user2):`);
+  const peerName = prompt(`Nhập tên định danh của Port ${peerPort}:`);
   if (!peerName) return;
-
   const result = await api('POST', '/add-list/', { port: parseInt(peerPort), username: peerName.trim() });
-  
-  if (result.status === 'success') {
-    showNotification(result.message);
-    await api('POST', '/connect-peer/', { port: parseInt(peerPort) });
-    refreshPeers(); 
-  } else {
-    alert("Lỗi: " + result.message);
-  }
+  if (result.status === 'success') { showNotification(result.message); await api('POST', '/connect-peer/', { port: parseInt(peerPort) }); refreshPeers(); } else alert("Lỗi: " + result.message);
 }
 
 async function refreshAll() { await refreshChannels(); await refreshPeers(); showNotification("Đã cập nhật!"); }
 
 // ========================================
-// Tin nhắn & Hình ảnh
+// HÀNG ĐỢI GỬI TIN NHẮN (CHỐNG MẤT TIN)
 // ========================================
+async function processSendQueue() {
+    if (isSending || sendQueue.length === 0) return;
+    isSending = true; 
+
+    while (sendQueue.length > 0) {
+        const task = sendQueue[0];
+        try {
+            await api('POST', task.endpoint, task.body);
+        } catch (e) {
+            console.error("Lỗi khi gửi tin:", e);
+        }
+        sendQueue.shift(); 
+        
+        // 🛑 BẢO BỐI: ÉP NGHỈ 200ms ĐỂ BACKEND LƯU KỊP TIMESTAMP MỚI
+        await new Promise(r => setTimeout(r, 200)); 
+    }
+
+    isSending = false; 
+    pollMessages(); 
+}
+
 async function sendMessage() {
   const input = document.getElementById('msg-input');
   
   if (pendingImageBase64) {
       const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
       const body = isDmChannel ? { from: currentUser, to: dmTarget, message: pendingImageBase64 } : { from: currentUser, message: pendingImageBase64, channel: currentChannel };
-      
       pendingImageBase64 = null; 
       input.value = '';
-      
-      await api('POST', endpoint, body); 
-      await pollMessages();
+      sendQueue.push({ endpoint, body }); 
+      processSendQueue(); 
       return;
   }
 
   const text = input.value.trim(); if (!text) return;
   input.value = '';
+  
   const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
   const body = isDmChannel ? { from: currentUser, to: dmTarget, message: text } : { from: currentUser, message: text, channel: currentChannel };
-  await api('POST', endpoint, body); await pollMessages();
+  
+  sendQueue.push({ endpoint, body }); 
+  processSendQueue(); 
 }
 
 function handleTyping() {
@@ -263,36 +303,56 @@ function markAsRead() {
   if (lastTimestamp > 0) api('POST', '/signal-read/', { channel: currentChannel, username: currentUser, timestamp: lastTimestamp });
 }
 
+// ========================================
+// VÉT CẠN TIN NHẮN (CHỐNG SÓT DO TRÙNG GIÂY)
+// ========================================
 async function pollMessages() {
-  const res = await api('POST', '/messages/', { channel: currentChannel, since: lastTimestamp });
-  if (res.status === 'success') {
-    res.data.messages.forEach(msg => { appendMessage(msg); if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; });
-    markAsRead(); 
+  if (isPolling) return; 
+  isPolling = true;      
 
-    const typers = (res.data.typing || []).filter(u => u !== currentUser);
-    document.getElementById('typing-indicator').style.display = typers.length ? 'flex' : 'none';
-    document.getElementById('typing-text').innerText = typers.length ? typers.join(', ') + ' đang gõ' : '';
-
-    document.querySelectorAll('.messenger-seen-row').forEach(el => el.remove());
-    const allMsgs = document.querySelectorAll('.msg');
-    if (allMsgs.length > 0) {
-      const veryLastMsg = allMsgs[allMsgs.length - 1];
-      if (veryLastMsg.dataset.author === currentUser) {
-        const lastTs = parseFloat(veryLastMsg.dataset.timestamp);
-        const readsData = (res.data && res.data.reads) ? res.data.reads : {};
-        const readers = Object.entries(readsData).filter(([u, t]) => u !== currentUser && parseFloat(t) >= lastTs).map(e => e[0]);
+  try {
+      // 🛑 BẢO BỐI 2: LÙI LẠI 2 GIÂY ĐỂ VÉT SẠCH CÁC TIN BỊ KẸT CÙNG THỜI ĐIỂM
+      const safeSince = lastTimestamp > 2 ? lastTimestamp - 2 : 0;
+      
+      const res = await api('POST', '/messages/', { channel: currentChannel, since: safeSince });
+      if (res.status === 'success') {
         
-        if (readers.length > 0) {
-          const seenRow = document.createElement('div'); seenRow.className = 'messenger-seen-row';
-          readers.forEach(reader => {
-            const avatar = document.createElement('div'); avatar.className = 'seen-avatar';
-            avatar.innerText = reader.charAt(0).toUpperCase(); avatar.title = 'Đã xem bởi ' + reader;
-            seenRow.appendChild(avatar);
-          });
-          veryLastMsg.appendChild(seenRow);
+        const sortedMsgs = res.data.messages.sort((a, b) => a.timestamp - b.timestamp);
+        
+        sortedMsgs.forEach(msg => { 
+            appendMessage(msg); 
+            // Cập nhật lastTimestamp nhưng chỉ lấy mốc cao nhất
+            if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; 
+        });
+        markAsRead(); 
+
+        const typers = (res.data.typing || []).filter(u => u !== currentUser);
+        document.getElementById('typing-indicator').style.display = typers.length ? 'flex' : 'none';
+        document.getElementById('typing-text').innerText = typers.length ? typers.join(', ') + ' đang gõ' : '';
+
+        document.querySelectorAll('.messenger-seen-row').forEach(el => el.remove());
+        const allMsgs = document.querySelectorAll('.msg');
+        if (allMsgs.length > 0) {
+          const veryLastMsg = allMsgs[allMsgs.length - 1];
+          if (veryLastMsg.dataset.author === currentUser) {
+            const lastTs = parseFloat(veryLastMsg.dataset.timestamp);
+            const readsData = (res.data && res.data.reads) ? res.data.reads : {};
+            const readers = Object.entries(readsData).filter(([u, t]) => u !== currentUser && parseFloat(t) >= lastTs).map(e => e[0]);
+            
+            if (readers.length > 0) {
+              const seenRow = document.createElement('div'); seenRow.className = 'messenger-seen-row';
+              readers.forEach(reader => {
+                const avatar = document.createElement('div'); avatar.className = 'seen-avatar';
+                avatar.innerText = reader.charAt(0).toUpperCase(); avatar.title = 'Đã xem bởi ' + reader;
+                seenRow.appendChild(avatar);
+              });
+              veryLastMsg.appendChild(seenRow);
+            }
+          }
         }
       }
-    }
+  } finally {
+      isPolling = false; 
   }
 }
 
@@ -304,15 +364,21 @@ async function loadMessages() {
 
 function appendMessage(msg) {
   const container = document.getElementById('messages');
-  const div = document.createElement('div');
   
-  // KIỂM TRA TRÁI / PHẢI
+  // 🛑 BẢO BỐI 3: CHỮ KÝ ĐIỆN TỬ DỰA VÀO NỘI DUNG CHỨ KHÔNG PHẢI ĐỘ DÀI
+  const rawText = msg.text || msg.message || '';
+  const textSnippet = encodeURIComponent(rawText.substring(0, 50)); 
+  const signature = msg.timestamp + '_' + msg.from + '_' + textSnippet;
+  
+  if (container.querySelector(`[data-signature="${signature}"]`)) return;
+
+  const div = document.createElement('div');
   const isMe = (msg.from === currentUser);
   div.className = `msg ${isMe ? 'me' : 'other'}`; 
   div.dataset.author = msg.from; 
   div.dataset.timestamp = msg.timestamp;
+  div.dataset.signature = signature; 
   
-  const rawText = msg.text || msg.message || '';
   let contentHtml = '';
   
   if (rawText.startsWith('data:image/') || rawText.match(/\.(png|jpg|jpeg|gif|webp)$/i) || rawText.startsWith('/uploads/')) {
@@ -327,11 +393,15 @@ function appendMessage(msg) {
 
   div.innerHTML = `<div class="msg-meta"><span class="msg-author">${isMe ? 'Bạn' : (msg.from || 'unknown')}</span><span class="msg-time">${formatTime(msg.timestamp)}</span></div>${contentHtml}`;
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  
+  const isAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+  if (isAtBottom || isMe) {
+      container.scrollTop = container.scrollHeight;
+  }
 }
 
 // ========================================
-// Upload File (Chuyển sang Base64) & Voice
+// Upload File & Voice
 // ========================================
 async function uploadFile() {
   const fileInput = document.getElementById('file-picker'); 
@@ -349,8 +419,9 @@ async function uploadFile() {
     const base64String = reader.result;
     const endpoint = isDmChannel ? '/send-peer/' : '/broadcast-peer/';
     const body = isDmChannel ? { from: currentUser, to: dmTarget, message: base64String } : { from: currentUser, message: base64String, channel: currentChannel };
-    await api('POST', endpoint, body); 
-    await pollMessages();
+    
+    sendQueue.push({ endpoint, body }); 
+    processSendQueue();
   };
   reader.readAsDataURL(file); 
   fileInput.value = '';
@@ -366,9 +437,21 @@ async function startRecording() {
     mediaRecorder.addEventListener("stop", async () => {
       const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); audioChunks = [];
       if (audioBlob.size < 2000) return showNotification("Ghi âm quá ngắn!");
-      const res = await fetch('/upload/', { method: 'POST', headers: { 'X-File-Name': `voice_${Date.now()}.webm` }, body: audioBlob });
+      
+      const savedSid = localStorage.getItem('chat_session_id');
+      const fetchHeaders = { 'X-File-Name': `voice_${Date.now()}.webm` };
+      if (savedSid) {
+          fetchHeaders['X-Session-Id'] = savedSid;
+          fetchHeaders['Authorization'] = `Bearer ${savedSid}`;
+      }
+
+      const res = await fetch(BASE_URL + '/upload/', { method: 'POST', headers: fetchHeaders, body: audioBlob });
       const result = await res.json();
-      if (result.status === 'success') { await api('POST', '/broadcast-peer/', { from: currentUser, message: result.url, channel: currentChannel }); pollMessages(); }
+      if (result.status === 'success') { 
+          const body = { from: currentUser, message: result.url, channel: currentChannel };
+          sendQueue.push({ endpoint: '/broadcast-peer/', body });
+          processSendQueue();
+      }
     });
   } catch (err) { alert("Vui lòng cấp quyền Micro!"); }
 }
@@ -382,7 +465,7 @@ function stopRecording() {
 }
 
 // ========================================
-// Emoji Picker
+// Emoji & UI Setup
 // ========================================
 const EMOJIS = ["😀","😂","😍","👍","🔥","❤️","✨","🙌","🚀","😭","😊","🥺","😎","🎉","💯","👀","🙏","💀"];
 function initEmojiPicker() {
@@ -403,26 +486,40 @@ document.addEventListener('click', function(event) {
   if (picker.style.display === 'grid' && !picker.contains(event.target) && !btn.contains(event.target)) picker.style.display = 'none';
 });
 
-// ========================================
-// NÚT SÁNG/TỐI TỰ ĐỘNG
-// ========================================
 document.addEventListener('DOMContentLoaded', () => {
     const sidebarFooter = document.querySelector('.sidebar-footer');
     if (sidebarFooter) {
         const themeBtn = document.createElement('button');
         themeBtn.className = 'btn-ghost';
         themeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg> Giao diện Sáng/Tối`;
-        
         themeBtn.onclick = () => {
             document.body.classList.toggle('light-mode');
-            const isLight = document.body.classList.contains('light-mode');
-            localStorage.setItem('theme_preference', isLight ? 'light' : 'dark');
+            localStorage.setItem('theme_preference', document.body.classList.contains('light-mode') ? 'light' : 'dark');
         };
-        
         sidebarFooter.appendChild(themeBtn);
+        if (localStorage.getItem('theme_preference') === 'light') document.body.classList.add('light-mode');
+    }
+});
+
+// ========================================
+// AUTO-LOGIN
+// ========================================
+document.addEventListener('DOMContentLoaded', async () => {
+    const savedSid = localStorage.getItem('chat_session_id');
+    const savedUser = localStorage.getItem('chat_username');
+
+    if (savedSid && savedUser) {
+        sessionId = savedSid;
+        currentUser = savedUser;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('chat-screen').style.display = 'flex';
+        document.getElementById('user-display').textContent = currentUser;
         
-        if (localStorage.getItem('theme_preference') === 'light') {
-            document.body.classList.add('light-mode');
-        }
+        await refreshChannels(); 
+        await refreshPeers(); 
+        loadMessages();
+        
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(() => { pollMessages(); refreshChannels(); refreshPeers(); }, 2000);
     }
 });

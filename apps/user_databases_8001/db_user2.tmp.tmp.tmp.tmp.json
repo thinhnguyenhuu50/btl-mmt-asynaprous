@@ -1,0 +1,70 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "dc5febb317902abd66c678ff656e9730",
+                "from": "user3",
+                "text": "7",
+                "timestamp": 1777879308.678281,
+                "channel": "general"
+            },
+            {
+                "msg_id": "6652e9b9016dd0352bf714f38fb503a5",
+                "from": "user2",
+                "text": "1",
+                "timestamp": 1777879799.2035635,
+                "channel": "general"
+            },
+            {
+                "msg_id": "b5bc3adfa9615475e918eacde5830752",
+                "from": "user2",
+                "text": "2",
+                "timestamp": 1777879800.7761102,
+                "channel": "general"
+            },
+            {
+                "msg_id": "57d58dd5d5bc6a524ca548cb4d9334ad",
+                "from": "user2",
+                "text": "3",
+                "timestamp": 1777879803.7780333,
+                "channel": "general"
+            },
+            {
+                "msg_id": "7c6791acb1ef01374a53ea605d7a780e",
+                "from": "user2",
+                "text": "😭🚀😭🚀😭",
+                "timestamp": 1777879872.5382614,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d19319ddaa2e613260823cbc555c3463",
+                "from": "user2",
+                "text": "123",
+                "timestamp": 1777879887.6742473,
+                "channel": "general"
+            },
+            {
+                "msg_id": "3b1d8b1ff12edb2e86661542ecf29a09",
+                "from": "user2",
+                "text": "444",
+                "timestamp": 1777879890.5528898,
+                "channel": "general"
+            },
+            {
+                "msg_id": "eff05f4f552391aac4e2bf75ffbffa53",
+                "from": "user2",
+                "text": "1233",
+                "timestamp": 1777879958.7771783,
+                "channel": "general"
+            },
+            {
+                "msg_id": "2dd0246f2681be9a031785b30630a5be",
+                "from": "user2",
+                "text": "🥺🥺💀💀💀💀",
+                "timestamp": 1777880081.9706583,
+                "channel": "general"
+            }
+        ]
+    }
+}

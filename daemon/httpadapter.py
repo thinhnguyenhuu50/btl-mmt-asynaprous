@@ -25,7 +25,7 @@ class HttpAdapter:
                     chunk = self.conn.recv(8192)
                     if not chunk: break
                     body_part += chunk
-                    raw_data += chunk
+                    raw_data  += chunk
             
             self.request.prepare(raw_data, self.routes)
             
