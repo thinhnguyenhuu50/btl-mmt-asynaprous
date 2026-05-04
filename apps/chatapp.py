@@ -25,7 +25,7 @@ CURRENT_USERNAME = None
 # ============================================================
 # LOGIC TRACKER & CACHE DANH BẠ (HYBRID P2P)
 # ============================================================
-TRACKER_URL = "http://10.130.8.37:80"
+TRACKER_URL = "http://127.0.0.1:80"
 
 active_peers_cache = [] 
 last_tracker_sync = 0
@@ -61,7 +61,8 @@ def heartbeat_worker():
         for port in active_ports:
             if port == CURRENT_PORT: continue 
             try:
-                req = urllib.request.Request(f"http://10.130.8.37:{port}/whoami/")
+                # 🛑 ĐÃ SỬA: Chuyển từ /whoami/ sang /ping/ để không bị kẹt Authentication
+                req = urllib.request.Request(f"http://127.0.0.1:{port}/ping/")
                 with urllib.request.urlopen(req, timeout=1.0) as res:
                     data = json.loads(res.read().decode())
                     uname = data.get("data", {}).get("username")
@@ -150,7 +151,7 @@ def p2p_sync_worker(endpoint, payload):
     
     for peer_port in peers_to_send:
         if peer_port == CURRENT_PORT: continue
-        url = f"http://10.130.8.37:{peer_port}{endpoint}"
+        url = f"http://127.0.0.1:{peer_port}{endpoint}"
         try:
             req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
             urllib.request.urlopen(req, timeout=0.5)
@@ -196,6 +197,13 @@ def whoami(headers="guest", body="anonymous", cookies=None):
     if not get_valid_username(cookies): return _error_response("401 Unauthorized")
     return _json_response({"username": CURRENT_USERNAME})
 
+# 🛑 ĐÃ THÊM: Cửa sau cho hệ thống P2P kiểm tra nhau không cần Cookie
+@app.route('/ping/', methods=['GET', 'POST'])
+def ping(headers="guest", body="anonymous", cookies=None):
+    if CURRENT_USERNAME:
+        return _json_response({"username": CURRENT_USERNAME})
+    return _error_response("Not logged in yet")
+
 @app.route('/submit-info/', methods=['POST'])
 def submit_info(headers="guest", body="anonymous", cookies=None):
     global CURRENT_USERNAME
@@ -221,7 +229,6 @@ def add_list(headers="guest", body="anonymous", cookies=None):
 
 @app.route('/connect-peer/', methods=['POST'])
 def connect_peer(headers="guest", body="anonymous", cookies=None):
-    # 🛑 CHỐT CỬA BẢO VỆ
     if not get_valid_username(cookies): return _error_response("401 Unauthorized")
     global CURRENT_USERNAME
     try:
@@ -234,7 +241,6 @@ def connect_peer(headers="guest", body="anonymous", cookies=None):
 
 @app.route('/sync-user/', methods=['POST'])
 def sync_user(headers="guest", body="anonymous", cookies=None):
-    # Đây là API hệ thống P2P gọi ngầm, không nên khóa Cookie vì Peer không có Cookie
     try:
         data = json.loads(_decode_body(body))
         if data.get('username'): load_db(data.get('username'))
@@ -244,7 +250,6 @@ def sync_user(headers="guest", body="anonymous", cookies=None):
 @app.route('/channels/', methods=['POST', 'GET'])
 def list_channels(headers="guest", body="anonymous", cookies=None): 
     try:
-        # 🛑 CHỐT CỬA BẢO VỆ ĐÃ ĐƯỢC ỐP VÀO
         username = get_valid_username(cookies) 
         if not username: return _error_response("401 Unauthorized")
 
@@ -271,7 +276,6 @@ def list_channels(headers="guest", body="anonymous", cookies=None):
 @app.route('/messages/', methods=['POST'])
 def fetch_messages(headers="guest", body="anonymous", cookies=None):
     try:
-        # 🛑 CHỐT CỬA BẢO VỆ
         username = get_valid_username(cookies) 
         if not username: return _error_response("401 Unauthorized")
 
@@ -297,7 +301,6 @@ def broadcast_peer(headers="guest", body="anonymous", cookies=None):
         data = json.loads(_decode_body(body))
         is_sync = data.get('is_sync', False)
 
-        # 🛑 NẾU LÀ USER GỬI (is_sync=False) THÌ KIỂM TRA VÉ
         if not is_sync:
             username = get_valid_username(cookies)
             if not username: return _error_response("401 Unauthorized")
@@ -337,7 +340,6 @@ def create_channel(headers="guest", body="anonymous", cookies=None):
         data = json.loads(_decode_body(body))
         is_sync = data.get('is_sync', False)
 
-        # 🛑 NẾU LÀ USER TẠO THÌ KIỂM TRA VÉ
         if not is_sync:
             username = get_valid_username(cookies)
             if not username: return _error_response("401 Unauthorized")
@@ -369,7 +371,6 @@ def send_peer(headers="guest", body="anonymous", cookies=None):
         data = json.loads(_decode_body(body))
         is_sync = data.get('is_sync', False)
 
-        # 🛑 KIỂM TRA VÉ CHO TIN NHẮN TỪ USER MỚI GỬI
         if not is_sync:
             username = get_valid_username(cookies)
             if not username: return _error_response("401 Unauthorized")
