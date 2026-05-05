@@ -1,8 +1,3 @@
-#
-# Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM.
-# All rights reserved.
-#
-
 import sys
 import os
 import json
@@ -25,31 +20,63 @@ CURRENT_USERNAME = None
 # ============================================================
 # LOGIC TRACKER & CACHE DANH BẠ (HYBRID P2P)
 # ============================================================
-TRACKER_URL = "http://127.0.0.1:80"
+TRACKER_URL = "http://10.130.8.37:80"
 
 active_peers_cache = [] 
 last_tracker_sync = 0
 online_status_cache = {} 
+channel_states = {} 
+
+# --- BỔ SUNG: CƠ CHẾ LƯU DANH BẠ RA FILE ĐỂ SINH TỒN ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def get_cache_file():
+    return os.path.join(BASE_DIR, f"peers_cache_{CURRENT_PORT}.json")
+
+def load_peers_cache():
+    global active_peers_cache
+    try:
+        if os.path.exists(get_cache_file()):
+            with open(get_cache_file(), 'r') as f:
+                active_peers_cache = json.load(f)
+    except: pass
+
+def save_peers_cache():
+    try:
+        with open(get_cache_file(), 'w') as f:
+            json.dump(active_peers_cache, f)
+    except: pass
+# --------------------------------------------------------
 
 def register_to_tracker():
     try:
         data = json.dumps({"port": CURRENT_PORT}).encode('utf-8')
         req = urllib.request.Request(f"{TRACKER_URL}/submit-info/", data=data, headers={'Content-Type': 'application/json'}, method='POST')
         urllib.request.urlopen(req, timeout=1)
-        print(f" Báo danh Port {CURRENT_PORT} với Tracker thành công!")
+        print(f" [Tracker] Báo danh Port {CURRENT_PORT} thành công!")
     except:
-        print(f" Tracker (Port 80) sập. Port {CURRENT_PORT} sử dụng danh bạ P2P dự phòng.")
+        print(f" [Tracker] Port 80 không phản hồi. Port {CURRENT_PORT} dùng danh bạ P2P dự phòng.")
 
 def get_active_peers(force_update=False):
     global active_peers_cache, last_tracker_sync
+    
+    # Nếu cache rỗng (mới bật máy), lôi từ ổ cứng ra xài ngay[cite: 7]
+    if not active_peers_cache:
+        load_peers_cache()
+        
     if force_update or (time.time() - last_tracker_sync > 5): 
         try:
             req = urllib.request.Request(f"{TRACKER_URL}/get-list/")
             with urllib.request.urlopen(req, timeout=0.5) as res:
                 data = json.loads(res.read().decode())
-                active_peers_cache = data.get("peers", active_peers_cache)
+                new_peers = data.get("peers", active_peers_cache)
+                # Nếu Proxy có cập nhật người mới, lưu ngay vào ổ cứng
+                if new_peers != active_peers_cache:
+                    active_peers_cache = new_peers
+                    save_peers_cache()
                 last_tracker_sync = time.time()
-        except: pass 
+        except: 
+            pass # Nếu Proxy sập, kệ nó, vẫn giữ nguyên active_peers_cache đã lấy từ ổ cứng[cite: 7]
     return active_peers_cache
 
 def heartbeat_worker():
@@ -61,8 +88,7 @@ def heartbeat_worker():
         for port in active_ports:
             if port == CURRENT_PORT: continue 
             try:
-                # 🛑 ĐÃ SỬA: Chuyển từ /whoami/ sang /ping/ để không bị kẹt Authentication
-                req = urllib.request.Request(f"http://127.0.0.1:{port}/ping/")
+                req = urllib.request.Request(f"http://10.130.8.37:{port}/ping/")
                 with urllib.request.urlopen(req, timeout=1.0) as res:
                     data = json.loads(res.read().decode())
                     uname = data.get("data", {}).get("username")
@@ -73,7 +99,6 @@ def heartbeat_worker():
 # ============================================================
 # CƠ SỞ DỮ LIỆU CÁCH LY & XỬ LÝ COOKIE XUNG ĐỘT
 # ============================================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _db_lock = threading.RLock()
 
 def get_db_dir():
@@ -140,9 +165,6 @@ def save_db(username, data):
             os.replace(tmp_file, db_file) 
         except: pass
 
-# ============================================================
-# GIAO THỨC ĐỒNG BỘ P2P TRỰC TIẾP
-# ============================================================
 def p2p_sync_worker(endpoint, payload):
     payload['is_sync'] = True
     payload['sender_port'] = CURRENT_PORT 
@@ -151,7 +173,7 @@ def p2p_sync_worker(endpoint, payload):
     
     for peer_port in peers_to_send:
         if peer_port == CURRENT_PORT: continue
-        url = f"http://127.0.0.1:{peer_port}{endpoint}"
+        url = f"http://10.130.8.37:{peer_port}{endpoint}"
         try:
             req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
             urllib.request.urlopen(req, timeout=0.5)
@@ -197,7 +219,6 @@ def whoami(headers="guest", body="anonymous", cookies=None):
     if not get_valid_username(cookies): return _error_response("401 Unauthorized")
     return _json_response({"username": CURRENT_USERNAME})
 
-# 🛑 ĐÃ THÊM: Cửa sau cho hệ thống P2P kiểm tra nhau không cần Cookie
 @app.route('/ping/', methods=['GET', 'POST'])
 def ping(headers="guest", body="anonymous", cookies=None):
     if CURRENT_USERNAME:
@@ -223,6 +244,7 @@ def add_list(headers="guest", body="anonymous", cookies=None):
         new_port = data.get('port')
         if new_port and new_port not in active_peers_cache:
             active_peers_cache.append(new_port)
+            save_peers_cache() # Lưu liền tay
             print(f" [Danh bạ] Đã thêm Peer thủ công tại Port: {new_port}")
         return _json_response({"status": "ok", "message": f"Đã thêm Port {new_port} vào danh bạ"})
     except Exception: return _error_response("Lỗi thêm vào danh sách")
@@ -292,7 +314,16 @@ def fetch_messages(headers="guest", body="anonymous", cookies=None):
         new_msgs = [m for m in msgs if float(m.get('timestamp', 0)) > since_ts]
         last_ts = max((float(m.get('timestamp', 0)) for m in new_msgs), default=since_ts)
         
-        return _json_response({"messages": new_msgs, "typing": [], "reads": {}, "last_ts": last_ts})
+        current_time = time.time()
+        c_state = channel_states.get(channel_name, {'typing': {}, 'reads': {}})
+        active_typers = [u for u, t in c_state.get('typing', {}).items() if current_time - t < 3]
+        
+        return _json_response({
+            "messages": new_msgs, 
+            "typing": active_typers, 
+            "reads": c_state.get('reads', {}), 
+            "last_ts": last_ts
+        })
     except: return _json_response({"messages": []})
 
 @app.route('/broadcast-peer/', methods=['POST'])
@@ -300,15 +331,26 @@ def broadcast_peer(headers="guest", body="anonymous", cookies=None):
     try:
         data = json.loads(_decode_body(body))
         is_sync = data.get('is_sync', False)
+        from_proxy = data.get('from_proxy', False)
 
-        if not is_sync:
+        if not is_sync and not from_proxy:
             username = get_valid_username(cookies)
             if not username: return _error_response("401 Unauthorized")
+            try:
+                data['sender_port'] = CURRENT_PORT
+                req = urllib.request.Request(f"{TRACKER_URL}/forward-broadcast/", data=json.dumps(data).encode('utf-8'), 
+                                           headers={'Content-Type': 'application/json'}, method='POST')
+                urllib.request.urlopen(req, timeout=0.5)
+                print(" [Smart Router] Đã ủy quyền Forwarding cho Proxy!")
+                return _json_response({"message": "Forwarded via Proxy"})
+            except Exception:
+                print(" [Smart Router] Proxy SẬP -> Kích hoạt cơ chế P2P Fallback!")
 
         from_user, message, channel = data.get('from', ''), data.get('message', ''), data.get('channel', 'general')
-        
         sender_port = data.get('sender_port', 'Unknown')
-        if is_sync: print(f" [Group: {channel}] Nhận tin nhắn từ '{from_user}' (Nguồn: 127.0.0.1:{sender_port})")
+        
+        if is_sync or from_proxy: 
+            print(f" [Group: {channel}] Nhận tin nhắn từ '{from_user}' (Nguồn: 127.0.0.1:{sender_port})")
 
         msg_ts = data.get('timestamp') or time.time()
         msg_id = data.get('msg_id') or hashlib.md5(f"{from_user}{message}{channel}{uuid.uuid4().hex}".encode()).hexdigest()
@@ -327,7 +369,7 @@ def broadcast_peer(headers="guest", body="anonymous", cookies=None):
                 })
             save_db(u, db)
 
-        if not is_sync:
+        if not is_sync and not from_proxy:
             data.update({"msg_id": msg_id, "timestamp": msg_ts})
             threading.Thread(target=p2p_sync_worker, args=('/broadcast-peer/', data), daemon=True).start()
 
@@ -370,15 +412,26 @@ def send_peer(headers="guest", body="anonymous", cookies=None):
     try:
         data = json.loads(_decode_body(body))
         is_sync = data.get('is_sync', False)
+        from_proxy = data.get('from_proxy', False)
 
-        if not is_sync:
+        if not is_sync and not from_proxy:
             username = get_valid_username(cookies)
             if not username: return _error_response("401 Unauthorized")
+            try:
+                data['sender_port'] = CURRENT_PORT
+                req = urllib.request.Request(f"{TRACKER_URL}/forward-dm/", data=json.dumps(data).encode('utf-8'), 
+                                           headers={'Content-Type': 'application/json'}, method='POST')
+                urllib.request.urlopen(req, timeout=0.5)
+                print(" [Smart Router] Đã ủy quyền Forwarding DM cho Proxy!")
+                return _json_response({"message": "DM Forwarded via Proxy"})
+            except Exception:
+                print(" [Smart Router] Proxy SẬP -> Kích hoạt cơ chế DM P2P Fallback!")
 
         from_user, to_user, message = data.get('from', ''), data.get('to', ''), data.get('message', '')
-        
         sender_port = data.get('sender_port', 'Unknown')
-        if is_sync: print(f" [DM] Nhận tin cá nhân từ '{from_user}' gửi cho '{to_user}' (Nguồn: 127.0.0.1:{sender_port})")
+        
+        if is_sync or from_proxy: 
+            print(f" [DM] Nhận tin cá nhân từ '{from_user}' gửi cho '{to_user}' (Nguồn: 127.0.0.1:{sender_port})")
         
         msg_ts = data.get('timestamp') or time.time()
         msg_id = data.get('msg_id') or hashlib.md5(f"dm|{from_user}{to_user}{message}{uuid.uuid4().hex}".encode()).hexdigest()
@@ -393,7 +446,7 @@ def send_peer(headers="guest", body="anonymous", cookies=None):
                 })
             save_db(u, db)
                 
-        if not is_sync:
+        if not is_sync and not from_proxy:
             data.update({"msg_id": msg_id, "timestamp": msg_ts})
             threading.Thread(target=p2p_sync_worker, args=('/send-peer/', data), daemon=True).start()
 
@@ -416,10 +469,48 @@ def get_list(headers="guest", body="anonymous", cookies=None):
             
     return _json_response({"peers": list(peer_dict.values())})
 
+@app.route('/signal-read/', methods=['POST'])
+def signal_read(headers="guest", body="anonymous", cookies=None):
+    username = get_valid_username(cookies)
+    if not username: return _error_response("401 Unauthorized")
+    try:
+        data = json.loads(_decode_body(body))
+        channel = data.get('channel', 'general')
+        ts = float(data.get('timestamp', 0))
+
+        if channel not in channel_states: channel_states[channel] = {'typing': {}, 'reads': {}}
+        channel_states[channel]['reads'][username] = ts
+
+        if not data.get('is_sync'):
+            data['is_sync'] = True
+            threading.Thread(target=p2p_sync_worker, args=('/signal-read/', data), daemon=True).start()
+
+        return _json_response({"status": "ok"})
+    except: return _error_response("Lỗi")
+
+@app.route('/signal-typing/', methods=['POST'])
+def signal_typing(headers="guest", body="anonymous", cookies=None):
+    username = get_valid_username(cookies)
+    if not username: return _error_response("401 Unauthorized")
+    try:
+        data = json.loads(_decode_body(body))
+        channel = data.get('channel', 'general')
+
+        if channel not in channel_states: channel_states[channel] = {'typing': {}, 'reads': {}}
+        channel_states[channel]['typing'][username] = time.time()
+
+        if not data.get('is_sync'):
+            data['is_sync'] = True
+            threading.Thread(target=p2p_sync_worker, args=('/signal-typing/', data), daemon=True).start()
+
+        return _json_response({"status": "ok"})
+    except: return _error_response("Lỗi")
+
 def create_chatapp(ip, port):
     global CURRENT_PORT
     CURRENT_PORT = port
     print(f" [ChatApp] Peer khởi động tại {ip}:{port}")
+    load_peers_cache() # Tải danh bạ ngay khi khởi động
     threading.Thread(target=register_to_tracker, daemon=True).start()
     threading.Thread(target=heartbeat_worker, daemon=True).start() 
     app.prepare_address(ip, port)

@@ -1,105 +1,137 @@
 import socket
 import threading
-import selectors
-import asyncio
+import select  
 from .httpadapter import HttpAdapter
 
-MODE = "thread" 
+MODE = "coroutine" 
+
 
 def handle_sync_client(conn, addr, routes):
     try:
         adapter = HttpAdapter(conn, addr, routes)
         adapter.handle_client()
     except Exception as e:
-        print(f"[Backend] Error: {e}")
+        pass
     finally:
         conn.close()
 
-sel = selectors.DefaultSelector()
 
-def accept_callback(sock, mask, routes):
-    conn, addr = sock.accept()
-    print(f"[Callback] Accepted from {addr}")
+callback_readers = {} 
+
+def accept_callback(server_sock, routes):
+    conn, addr = server_sock.accept()
+    print(f"[Callback Manual] Accepted from {addr}")
     conn.setblocking(False)
-    sel.register(conn, selectors.EVENT_READ, lambda c, m: handle_callback_read(c, m, addr, routes))
+    callback_readers[conn] = lambda c=conn: handle_callback_read(c, addr, routes)
 
-def handle_callback_read(conn, mask, addr, routes):
+def handle_callback_read(conn, addr, routes):
     try:
         adapter = HttpAdapter(conn, addr, routes)
         adapter.handle_client()
     finally:
-        sel.unregister(conn)
+        if conn in callback_readers:
+            del callback_readers[conn]
         conn.close()
 
-async def handle_async_client(reader, writer, routes):
-    addr = writer.get_extra_info('peername')
-    print(f"[Coroutine] Accepted from {addr}")
-    try:
-        data = await reader.read(8192)
-        if not data: return
-        
-        if b'\r\n\r\n' in data:
-            headers_part, body_part = data.split(b'\r\n\r\n', 1)
-            content_length = 0
-            for line in headers_part.decode('utf-8', errors='ignore').split('\r\n'):
-                if line.lower().startswith('content-length:'):
-                    try: content_length = int(line.split(':')[1].strip())
-                    except: pass
-            
-            while len(body_part) < content_length:
-                chunk = await reader.read(8192)
-                if not chunk: break
-                body_part += chunk
-                data += chunk
 
-        class AsyncSocketMock:
-            def __init__(self, full_data):
+tasks = []         
+coro_readers = {}   
+
+def accept_coroutine(server_sock, routes):
+    while True:
+        yield 'read', server_sock
+        conn, addr = server_sock.accept()
+        print(f"[Coroutine Manual] Accepted from {addr}")
+        conn.setblocking(False)
+        tasks.append(handle_client_coroutine(conn, addr, routes))
+
+def handle_client_coroutine(conn, addr, routes):
+    data = b''
+    while True:
+        yield 'read', conn
+        try:
+            chunk = conn.recv(8192)
+            if not chunk: break
+            data += chunk
+            
+            if b'\r\n\r\n' in data:
+                headers_part, body_part = data.split(b'\r\n\r\n', 1)
+                content_length = 0
+                for line in headers_part.decode('utf-8', errors='ignore').split('\r\n'):
+                    if line.lower().startswith('content-length:'):
+                        try: content_length = int(line.split(':')[1].strip())
+                        except: pass
+                
+                if len(body_part) >= content_length:
+                    break
+        except BlockingIOError:
+            continue
+        except Exception:
+            break
+
+    if data:
+        class SyncSocketMock:
+            def __init__(self, full_data, real_conn):
                 self.full_data = full_data
                 self.pos = 0
+                self.real_conn = real_conn
             def recv(self, size):
                 chunk = self.full_data[self.pos : self.pos + size]
                 self.pos += size
                 return chunk
-            def sendall(self, content): writer.write(content)
+            def sendall(self, content): 
+                self.real_conn.sendall(content)
             def close(self): pass
 
-        adapter = HttpAdapter(AsyncSocketMock(data), addr, routes)
-        adapter.handle_client()
-        await writer.drain()
-    except Exception as e:
-        print(f"[Coroutine Error] {e}")
-    finally:
-        writer.close()
-        await writer.wait_closed()
+        try:
+            adapter = HttpAdapter(SyncSocketMock(data, conn), addr, routes)
+            adapter.handle_client()
+        except Exception as e:
+            print(f"[Coroutine Error] {e}")
+
+    conn.close()
 
 def create_backend(ip, port, routes={}):
-    print(f" [Backend] Đang khởi động chế độ: {MODE.upper()} tại {ip}:{port}")
+    print(f" [Backend] Đang chạy {MODE.upper()} bằng Event Loop Thủ Công tại {ip}:{port}")
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((ip, int(port)))
+    server.listen(100)
 
     if MODE == "thread":
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((ip, int(port)))
-        server.listen(100)
         while True:
             conn, addr = server.accept()
             threading.Thread(target=handle_sync_client, args=(conn, addr, routes), daemon=True).start()
 
     elif MODE == "callback":
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((ip, int(port)))
-        server.listen(100)
         server.setblocking(False)
-        sel.register(server, selectors.EVENT_READ, lambda s, m: accept_callback(s, m, routes))
+        callback_readers[server] = lambda: accept_callback(server, routes)
+        
         while True:
-            events = sel.select()
-            for key, mask in events:
-                callback = key.data
-                callback(key.fileobj, mask)
+            if not callback_readers: break
+            r, _, _ = select.select(callback_readers.keys(), [], [])
+            for sock in r:
+                callback_readers[sock]() 
 
     elif MODE == "coroutine":
-        async def run_async_server():
-            server = await asyncio.start_server(lambda r, w: handle_async_client(r, w, routes), ip, port)
-            async with server:
-                await server.serve_forever()
-        asyncio.run(run_async_server())
+        server.setblocking(False)
+        tasks.append(accept_coroutine(server, routes))
+        
+      
+        while tasks or coro_readers:
+            while tasks:
+                task = tasks.pop(0)
+                try:
+                    op, sock = next(task)
+                    if op == 'read':
+                        coro_readers[sock] = task # Đưa vào danh sách chờ
+                except StopIteration:
+                    pass # Hàm đã chạy xong thì bỏ qua
+            
+            if not coro_readers: break
+            
+            r, _, _ = select.select(coro_readers.keys(), [], [])
+            
+            for sock in r:
+                tasks.append(coro_readers.pop(sock))
