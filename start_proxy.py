@@ -1,126 +1,93 @@
-# reverse_proxy.py
-#
-# Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM.
-# All rights reserved.
-# This file is part of the CO3093/CO3094 course,
-# and is released under the "MIT License Agreement". Please see the LICENSE
-# file that should have been included as part of this package.
-#
-# AsynapRous release
-#
-# The authors hereby grant to Licensee personal permission to use
-# and modify the Licensed Source Code for the sole purpose of studying
-# while attending the course
-#
-
-
-"""
-start_proxy
-~~~~~~~~~~~~~~~~~
-
-This module serves as the entry point for launching a proxy server using Python's socket framework.
-It parses command-line arguments to configure the server's IP address and port, reads virtual host
-definitions from a configuration file, and initializes the proxy server with routing information.
-
-Requirements:
---------------
-- socket: provide socket networking interface.
-- threading: enables concurrent client handling via threads.
-- argparse: parses command-line arguments for server configuration.
-- re: used for regular expression matching in configuration parsing
-- response: response utilities.
-- httpadapter: the class for handling HTTP requests.
-- urlparse: parses URLs to extract host and port information.
-- daemon.create_proxy: initializes and starts the proxy server.
-
-"""
-
-import socket
+import json
+import urllib.request
 import threading
-import argparse
-import re
-from urllib.parse import urlparse
-from collections import defaultdict
+import itertools
+from daemon import AsynapRous
 
-from daemon import create_proxy
+app = AsynapRous()
 
-PROXY_PORT = 8080
+# Khởi tạo danh bạ
+registered_peers = []
+peer_cycle = None
 
+def _decode_body(body):
+    return body.decode('utf-8') if isinstance(body, bytes) else body
 
-def parse_virtual_hosts(config_file):
-    """
-    Parses virtual host blocks from a config file.
+@app.route('/submit-info/', methods=['POST'])
+def register_peer(headers, body, cookies=None):
+    """Khi một Node (9000, 9001...) bật lên, nó sẽ báo danh về đây"""
+    global registered_peers, peer_cycle
+    try:
+        data = json.loads(_decode_body(body))
+        port = data.get('port')
+        if port and port not in registered_peers:
+            registered_peers.append(int(port))
+            registered_peers.sort()
+            peer_cycle = itertools.cycle(registered_peers)
+            print(f" [Tracker] Peer {port} vừa gia nhập mạng lưới.")
+        return json.dumps({"status": "success"})
+    except:
+        return json.dumps({"status": "error"})
 
-    :config_file (str): Path to the NGINX config file.
-    :rtype list of dict: Each dict contains 'listen'and 'server_name'.
-    """
+@app.route('/get-list/', methods=['GET', 'POST'])
+def get_peers(headers, body, cookies=None):
+    """Trả về danh sách các Node đang sẵn sàng chat với nhau"""
+    return json.dumps({"peers": registered_peers})
 
-    with open(config_file, 'r') as f:
-        config_text = f.read()
+def get_target_backend(sender_port=None):
+    global peer_cycle
+    if not registered_peers: return None
+    if sender_port:
+        idx = int(sender_port) % len(registered_peers)
+        return registered_peers[idx]
+    return next(peer_cycle)
 
-    # Match each host block
-    host_blocks = re.findall(r'host\s+"([^"]+)"\s*\{(.*?)\}', config_text, re.DOTALL)
+@app.route('/forward-broadcast/', methods=['POST'])
+def forward_broadcast(headers, body, cookies=None):
+    try:
+        data = json.loads(_decode_body(body))
+        data['from_proxy'] = True 
+        sender_port = data.get('sender_port', 'Unknown')
+        target_port = get_target_backend(sender_port)
 
-    dist_policy_map = ""
+        if not target_port: return json.dumps({"status": "error"})
 
-    routes = {}
-    for host, block in host_blocks:
-        proxy_map = {}
+        print(f" [Router] Định tuyến: Cổng {sender_port} -> Xử lý tại Backend {target_port}")
+        payload = json.dumps(data).encode('utf-8')
+        
+        # Chạy ngầm để không block Peer
+        def background_broadcast():
+            for port in list(registered_peers):
+                try:
+                    req = urllib.request.Request(f"http://10.130.8.37:{port}/broadcast-peer/", 
+                                               data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+                    urllib.request.urlopen(req, timeout=1.0)
+                except: pass
 
-        # Find all proxy_pass entries
-        proxy_passes = re.findall(r'proxy_pass\s+http://([^\s;]+);', block)
-        map = proxy_map.get(host,[])
-        map = map + proxy_passes
-        proxy_map[host] = map
+        threading.Thread(target=background_broadcast, daemon=True).start()
+        return json.dumps({"status": "ok"})
+    except: return json.dumps({"status": "error"})
 
-        # Find dist_policy if present
-        policy_match = re.search(r'dist_policy\s+(\w+)', block)
-        if policy_match:
-            dist_policy_map = policy_match.group(1)
-        else: #default policy is round_robin
-            dist_policy_map = 'round-robin'
-            
-        #
-        # @bksysnet: Build the mapping and policy
-        # TODO: this policy varies among scenarios 
-        #       the default policy is provided with one proxy_pass
-        #       In the multi alternatives of proxy_pass then
-        #       the policy is applied to identify the highes matching
-        #       proxy_pass
-        #
-        if len(proxy_map.get(host,[])) == 1:
-            routes[host] = (proxy_map.get(host,[])[0], dist_policy_map)
-        # esle if:
-        #         TODO:  apply further policy matching here
-        #
-        else:
-            routes[host] = (proxy_map.get(host,[]), dist_policy_map)
+@app.route('/forward-dm/', methods=['POST'])
+def forward_dm(headers, body, cookies=None):
+    try:
+        data = json.loads(_decode_body(body))
+        data['from_proxy'] = True 
+        payload = json.dumps(data).encode('utf-8')
 
-    for key, value in routes.items():
-        print(key, value)
-    return routes
+        def background_dm():
+            for port in list(registered_peers):
+                try:
+                    req = urllib.request.Request(f"http://10.130.8.37:{port}/send-peer/", 
+                                               data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+                    urllib.request.urlopen(req, timeout=1.0)
+                except: pass
 
+        threading.Thread(target=background_dm, daemon=True).start()
+        return json.dumps({"status": "ok"})
+    except: return json.dumps({"status": "error"})
 
 if __name__ == "__main__":
-    """
-    Entry point for launching the proxy server.
-
-    This block parses command-line arguments to determine the server's IP address
-    and port. It then calls `create_backend(ip, port)` to start the RESTful
-    application server.
-
-    :arg --server-ip (str): IP address to bind the server (default: 127.0.0.1).
-    :arg --server-port (int): Port number to bind the server (default: 9000).
-    """
-
-    parser = argparse.ArgumentParser(prog='Proxy', description='', epilog='Proxy daemon')
-    parser.add_argument('--server-ip', default='0.0.0.0')
-    parser.add_argument('--server-port', type=int, default=PROXY_PORT)
- 
-    args = parser.parse_args()
-    ip = args.server_ip
-    port = args.server_port
-
-    routes = parse_virtual_hosts("config/proxy.conf")
-
-    create_proxy(ip, port, routes)
+    print(" [Tracker Proxy] Đang chạy tại http://127.0.0.1:80 ...")
+    app.prepare_address('10.130.8.37', 80)
+    app.run()

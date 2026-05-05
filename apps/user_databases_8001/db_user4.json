@@ -1,0 +1,47 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "ddb1e767620be11ce8139f29ed282d52",
+                "from": "user4",
+                "text": "hi",
+                "timestamp": 1777971925.8920693,
+                "channel": "general"
+            },
+            {
+                "msg_id": "e81f4638c63ab71f73c9336e235c4098",
+                "from": "user2",
+                "text": "122222",
+                "timestamp": 1777971998.4258761,
+                "channel": "general"
+            },
+            {
+                "msg_id": "275fd4f2d8a2c6448ea18425f7c5a55c",
+                "from": "user4",
+                "text": "hello",
+                "timestamp": 1777972002.7476895,
+                "channel": "general"
+            }
+        ]
+    },
+    "xyz": {
+        "members": [
+            "user2"
+        ],
+        "messages": [
+            {
+                "msg_id": "79c2c466420d9c3973ea70bddf310578",
+                "from": "user2",
+                "text": "123333",
+                "timestamp": 1777971956.8372161,
+                "channel": "xyz"
+            }
+        ],
+        "is_private": true,
+        "allowed_members": [
+            "user3",
+            "user2"
+        ]
+    }
+}
