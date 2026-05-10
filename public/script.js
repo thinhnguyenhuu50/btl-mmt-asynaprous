@@ -1,12 +1,12 @@
 /**
- * script.js - Phiên bản Tối Thượng (Rewind Polling + Queue Delay + Lọc Rác)
- * Xử lý dứt điểm 100% lỗi mất tin nhắn do trùng Timestamp ở Backend.
+ * script.js - Phiên bản Ép Xung Polling (Fast Polling) + ZMQ Brokerless
+ * Tốc độ quét 500ms - Cập nhật tin nhắn gần như tức thời.
  */
 
 const BASE_URL = window.location.origin; 
 
 let currentUser = '', sessionId = '', currentChannel = 'general', isDmChannel = false, dmTarget = '';
-let lastTimestamp = 0, pollInterval = null, typingTimer = null;
+let lastTimestamp = 0, pollInterval = null, uiInterval = null, typingTimer = null;
 let readCounts = {}, previousTotalUnread = 0, isFirstLoad = true;
 let pendingImageBase64 = null; 
 
@@ -75,7 +75,6 @@ async function api(method, path, body = null) {
     const resp = await fetch(BASE_URL + path, opts);
     return JSON.parse(await resp.text());
   } catch (e) { 
-    console.error(`🚨 Lỗi API [${path}]:`, e.message);
     return { status: 'error', message: e.message }; 
   }
 }
@@ -134,8 +133,16 @@ async function doLogin() {
     await refreshPeers(); 
     loadMessages();
 
+    // KIẾN TRÚC ÉP XUNG POLLING:
     if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(() => { pollMessages(); refreshChannels(); refreshPeers(); }, 2000);
+    if (uiInterval) clearInterval(uiInterval);
+    
+    // 1. Quét tin nhắn siêu tốc: 500ms / lần
+    pollInterval = setInterval(() => { pollMessages(); }, 500);
+    
+    // 2. Cập nhật danh bạ & kênh chậm hơn: 3000ms / lần (Tránh chớp giật UI)
+    uiInterval = setInterval(() => { refreshChannels(); refreshPeers(); }, 3000);
+    
   } else {
     document.getElementById('login-error').textContent = result.message || 'Sai tài khoản hoặc mật khẩu';
   }
@@ -246,7 +253,7 @@ async function promptAddPeer() {
 async function refreshAll() { await refreshChannels(); await refreshPeers(); showNotification("Đã cập nhật!"); }
 
 // ========================================
-// HÀNG ĐỢI GỬI TIN NHẮN (CHỐNG MẤT TIN)
+// HÀNG ĐỢI GỬI TIN NHẮN 
 // ========================================
 async function processSendQueue() {
     if (isSending || sendQueue.length === 0) return;
@@ -261,8 +268,8 @@ async function processSendQueue() {
         }
         sendQueue.shift(); 
         
-        // 🛑 BẢO BỐI: ÉP NGHỈ 200ms ĐỂ BACKEND LƯU KỊP TIMESTAMP MỚI
-        await new Promise(r => setTimeout(r, 200)); 
+        // Nghỉ giữa các lần gửi 100ms
+        await new Promise(r => setTimeout(r, 100)); 
     }
 
     isSending = false; 
@@ -304,14 +311,13 @@ function markAsRead() {
 }
 
 // ========================================
-// VÉT CẠN TIN NHẮN (CHỐNG SÓT DO TRÙNG GIÂY)
+// VÉT CẠN TIN NHẮN (TỐC ĐỘ 500ms)
 // ========================================
 async function pollMessages() {
   if (isPolling) return; 
   isPolling = true;      
 
   try {
-      // 🛑 BẢO BỐI 2: LÙI LẠI 2 GIÂY ĐỂ VÉT SẠCH CÁC TIN BỊ KẸT CÙNG THỜI ĐIỂM
       const safeSince = lastTimestamp > 2 ? lastTimestamp - 2 : 0;
       
       const res = await api('POST', '/messages/', { channel: currentChannel, since: safeSince });
@@ -321,7 +327,6 @@ async function pollMessages() {
         
         sortedMsgs.forEach(msg => { 
             appendMessage(msg); 
-            // Cập nhật lastTimestamp nhưng chỉ lấy mốc cao nhất
             if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp; 
         });
         markAsRead(); 
@@ -365,7 +370,6 @@ async function loadMessages() {
 function appendMessage(msg) {
   const container = document.getElementById('messages');
   
-  // 🛑 BẢO BỐI 3: CHỮ KÝ ĐIỆN TỬ DỰA VÀO NỘI DUNG CHỨ KHÔNG PHẢI ĐỘ DÀI
   const rawText = msg.text || msg.message || '';
   const textSnippet = encodeURIComponent(rawText.substring(0, 50)); 
   const signature = msg.timestamp + '_' + msg.from + '_' + textSnippet;
@@ -519,7 +523,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         await refreshPeers(); 
         loadMessages();
         
+        // KIẾN TRÚC ÉP XUNG POLLING:
         if (pollInterval) clearInterval(pollInterval);
-        pollInterval = setInterval(() => { pollMessages(); refreshChannels(); refreshPeers(); }, 2000);
+        if (uiInterval) clearInterval(uiInterval);
+        
+        // 1. Quét tin nhắn siêu tốc: 500ms / lần
+        pollInterval = setInterval(() => { pollMessages(); }, 500);
+        
+        // 2. Cập nhật danh bạ & kênh chậm hơn: 3000ms / lần (Tránh chớp giật UI)
+        uiInterval = setInterval(() => { refreshChannels(); refreshPeers(); }, 3000);
     }
 });
