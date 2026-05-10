@@ -1,0 +1,57 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "7b03b059ddfb47fb7ce77178f188ceea",
+                "from": "user3",
+                "text": "3",
+                "timestamp": 1778394918.4900126,
+                "channel": "general"
+            },
+            {
+                "msg_id": "b4114546519947c4fa8b7ed29dfb42b3",
+                "from": "user2",
+                "text": "r",
+                "timestamp": 1778394925.0368514,
+                "channel": "general"
+            },
+            {
+                "msg_id": "21c54d0fffdcea436fdfafc5ebaab8ba",
+                "from": "user2",
+                "text": "3",
+                "timestamp": 1778394956.12095,
+                "channel": "general"
+            }
+        ]
+    },
+    "dm:user2<->user3": {
+        "members": [
+            "user2",
+            "user3"
+        ],
+        "messages": [
+            {
+                "msg_id": "7b9adf57990b798e95e33c470ea9742c",
+                "from": "user2",
+                "to": "user3",
+                "text": "7u",
+                "timestamp": 1778394932.96856
+            },
+            {
+                "msg_id": "721cd0b1d20ed444ff34afd248bae6e6",
+                "from": "user3",
+                "to": "user2",
+                "text": "8",
+                "timestamp": 1778394940.0485697
+            },
+            {
+                "msg_id": "57c5c5c6836155ac8642b49d0e6ca9dc",
+                "from": "user3",
+                "to": "user2",
+                "text": "ê",
+                "timestamp": 1778394950.7180037
+            }
+        ]
+    }
+}

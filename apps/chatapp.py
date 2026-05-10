@@ -20,14 +20,14 @@ CURRENT_USERNAME = None
 # ============================================================
 # LOGIC TRACKER & CACHE DANH BẠ (HYBRID P2P)
 # ============================================================
-TRACKER_URL = "http://10.130.8.37:80"
+TRACKER_URL = "http://127.0.0.1:80"
 
 active_peers_cache = [] 
 last_tracker_sync = 0
 online_status_cache = {} 
 channel_states = {} 
 
-# --- BỔ SUNG: CƠ CHẾ LƯU DANH BẠ RA FILE ĐỂ SINH TỒN ---
+# --- CƠ CHẾ LƯU DANH BẠ RA FILE ĐỂ SINH TỒN ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_cache_file():
@@ -88,7 +88,7 @@ def heartbeat_worker():
         for port in active_ports:
             if port == CURRENT_PORT: continue 
             try:
-                req = urllib.request.Request(f"http://10.130.8.37:{port}/ping/")
+                req = urllib.request.Request(f"http://127.0.0.1:{port}/ping/")
                 with urllib.request.urlopen(req, timeout=1.0) as res:
                     data = json.loads(res.read().decode())
                     uname = data.get("data", {}).get("username")
@@ -173,7 +173,7 @@ def p2p_sync_worker(endpoint, payload):
     
     for peer_port in peers_to_send:
         if peer_port == CURRENT_PORT: continue
-        url = f"http://10.130.8.37:{peer_port}{endpoint}"
+        url = f"http://127.0.0.1:{peer_port}{endpoint}"
         try:
             req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
             urllib.request.urlopen(req, timeout=0.5)

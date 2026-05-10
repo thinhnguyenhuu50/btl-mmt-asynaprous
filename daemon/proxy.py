@@ -19,7 +19,7 @@ def forward_request(host, port, request_bytes):
             response += chunk
         return response
     except Exception as e:
-        print(f"   ❌ [LỖI KẾT NỐI] Không thể forward tới Backend {host}:{port}")
+        print(f"   [LỖI KẾT NỐI] Không thể forward tới Backend {host}:{port}")
         return b"HTTP/1.1 502 Bad Gateway\r\n\r\n502 Bad Gateway"
     finally:
         backend.close()
@@ -63,10 +63,10 @@ def handle_client(conn, addr, routes):
         RR_STATE[host_str] = (current_index + 1) % len(backends)
 
         print("\n" + " DISPATCHING REQUEST ".center(60, "="))
-        print(f"📡 Nguồn (Client) : {addr[0]}:{addr[1]}")
-        print(f"🌐 Tên miền ảo    : {host_str}")
-        print(f"⚙️  Thuật toán     : Round-Robin")
-        print(f"📊 Trạng thái     : Đang chọn Backend thứ {current_index + 1} trên tổng số {len(backends)}")
+        print(f"Nguồn (Client) : {addr[0]}:{addr[1]}")
+        print(f"Tên miền ảo    : {host_str}")
+        print(f"Thuật toán     : Round-Robin")
+        print(f"Trạng thái     : Đang chọn Backend thứ {current_index + 1} trên tổng số {len(backends)}")
         
         visual_rr = ""
         for i in range(len(backends)):
@@ -74,7 +74,7 @@ def handle_client(conn, addr, routes):
                 visual_rr += f" [👉 {backends[i]}] "
             else:
                 visual_rr += f"  {backends[i]}  "
-        print(f"🔄 Vòng xoay      :{visual_rr}")
+        print(f"Vòng xoay      :{visual_rr}")
         print("".center(60, "="))
 
         #  Xử lý IP/Port và Forward
@@ -88,7 +88,7 @@ def handle_client(conn, addr, routes):
         conn.sendall(response)
         
     except Exception as e:
-        print(f"⚠️ Proxy Error: {e}")
+        print(f"Proxy Error: {e}")
     finally:
         conn.close()
 
@@ -99,8 +99,8 @@ def create_proxy(ip, port, routes=PROXY_PASS):
     proxy.listen(100)
     
     print("\n" + " PROXY DAEMON STARTED ".center(60, "#"))
-    print(f"🚀 Địa chỉ: {ip}:{port}")
-    print(f"📋 Routes nạp thành công: {list(routes.keys())}")
+    print(f"Địa chỉ: {ip}:{port}")
+    print(f"Routes nạp thành công: {list(routes.keys())}")
     print("#".center(60, "#") + "\n")
     
     while True:
