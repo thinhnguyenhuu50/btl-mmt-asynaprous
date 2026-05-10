@@ -3,7 +3,7 @@ import threading
 import select  
 from .httpadapter import HttpAdapter
 
-MODE = "coroutine" 
+MODE = "callback" 
 
 
 def handle_sync_client(conn, addr, routes):

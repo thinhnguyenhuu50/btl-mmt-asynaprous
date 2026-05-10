@@ -1,0 +1,28 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "c964127e42758fb07cc442dd3c4c6239",
+                "from": "user2",
+                "text": "a",
+                "timestamp": 1778371572.1840334,
+                "channel": "general"
+            },
+            {
+                "msg_id": "4587e672b4868fc080af50d163b73a59",
+                "from": "user2",
+                "text": "cíu tôi với",
+                "timestamp": 1778371587.7549307,
+                "channel": "general"
+            },
+            {
+                "msg_id": "d0fe823fe1ba91f3b5b34a5bac32bc93",
+                "from": "user3",
+                "text": "sao thế",
+                "timestamp": 1778371596.0820668,
+                "channel": "general"
+            }
+        ]
+    }
+}

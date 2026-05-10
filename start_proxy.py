@@ -59,7 +59,7 @@ def forward_broadcast(headers, body, cookies=None):
         def background_broadcast():
             for port in list(registered_peers):
                 try:
-                    req = urllib.request.Request(f"http://10.130.8.37:{port}/broadcast-peer/", 
+                    req = urllib.request.Request(f"http://127.0.0.1:{port}/broadcast-peer/", 
                                                data=payload, headers={'Content-Type': 'application/json'}, method='POST')
                     urllib.request.urlopen(req, timeout=1.0)
                 except: pass
@@ -78,7 +78,7 @@ def forward_dm(headers, body, cookies=None):
         def background_dm():
             for port in list(registered_peers):
                 try:
-                    req = urllib.request.Request(f"http://10.130.8.37:{port}/send-peer/", 
+                    req = urllib.request.Request(f"http://127.0.0.1:{port}/send-peer/", 
                                                data=payload, headers={'Content-Type': 'application/json'}, method='POST')
                     urllib.request.urlopen(req, timeout=1.0)
                 except: pass
@@ -89,5 +89,5 @@ def forward_dm(headers, body, cookies=None):
 
 if __name__ == "__main__":
     print(" [Tracker Proxy] Đang chạy tại http://127.0.0.1:80 ...")
-    app.prepare_address('10.130.8.37', 80)
+    app.prepare_address('127.0.0.1', 80)
     app.run()
