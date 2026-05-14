@@ -3,66 +3,17 @@
         "members": [],
         "messages": [
             {
-                "msg_id": "ddb1e767620be11ce8139f29ed282d52",
-                "from": "user4",
-                "text": "hi",
-                "timestamp": 1777971925.8920693,
-                "channel": "general"
-            },
-            {
-                "msg_id": "e81f4638c63ab71f73c9336e235c4098",
+                "msg_id": "b55a1532621a3434601fc1a38519a272",
                 "from": "user2",
-                "text": "122222",
-                "timestamp": 1777971998.4258761,
+                "text": "cíu tôi",
+                "timestamp": 1778700521.2088156,
                 "channel": "general"
             },
             {
-                "msg_id": "275fd4f2d8a2c6448ea18425f7c5a55c",
-                "from": "user4",
-                "text": "hello",
-                "timestamp": 1777972002.7476895,
-                "channel": "general"
-            },
-            {
-                "msg_id": "dc1293b8b3dbe76b11049bfb81327c4e",
+                "msg_id": "47a4b22a6d1fdbd109d3638b58825e45",
                 "from": "user2",
-                "text": "hello",
-                "timestamp": 1778699950.0778966,
-                "channel": "general"
-            },
-            {
-                "msg_id": "71ad65e14296d8f7c5d3bc4589cc9c30",
-                "from": "user3",
-                "text": "sao rứa",
-                "timestamp": 1778699956.502635,
-                "channel": "general"
-            },
-            {
-                "msg_id": "54aa42f9275c07b64dfe4b7d07cf9dd0",
-                "from": "user3",
-                "text": "3",
-                "timestamp": 1778700004.263159,
-                "channel": "general"
-            },
-            {
-                "msg_id": "0c58b47e50529b53ff7d4128e082086e",
-                "from": "user3",
                 "text": "a",
-                "timestamp": 1778700495.888679,
-                "channel": "general"
-            },
-            {
-                "msg_id": "17e4118cbebe9cf6d2137c33a1881bc9",
-                "from": "user3",
-                "text": "7",
-                "timestamp": 1778700556.4869204,
-                "channel": "general"
-            },
-            {
-                "msg_id": "bde092dfef776cf86dcce6ad970aca64",
-                "from": "user3",
-                "text": "bb",
-                "timestamp": 1778717680.8790798,
+                "timestamp": 1778717674.215067,
                 "channel": "general"
             },
             {
@@ -200,34 +151,103 @@
             }
         ]
     },
-    "xyz": {
+    "dm:user2<->user3": {
         "members": [
-            "user2"
+            "user2",
+            "user3"
         ],
         "messages": [
             {
-                "msg_id": "79c2c466420d9c3973ea70bddf310578",
+                "msg_id": "1302873fb66cec7ce66f2fdcdaec5f20",
                 "from": "user2",
-                "text": "123333",
-                "timestamp": 1777971956.8372161,
-                "channel": "xyz"
-            }
-        ],
-        "is_private": true,
-        "allowed_members": [
-            "user3",
-            "user2"
-        ]
-    },
-    "dm:user2<->user3": {
-        "members": [],
-        "messages": [
+                "to": "user3",
+                "text": "cíu",
+                "timestamp": 1778699964.9013512
+            },
+            {
+                "msg_id": "bcd8fe565ed3ea4aec3ef500bb64eae0",
+                "from": "user2",
+                "to": "user3",
+                "text": "hi",
+                "timestamp": 1778719108.6688933
+            },
+            {
+                "msg_id": "cfc43f3aea39a2b7434a2ccfca986c73",
+                "from": "user3",
+                "to": "user2",
+                "text": "hi",
+                "timestamp": 1778719122.6747806
+            },
+            {
+                "msg_id": "1da576d01ce3541d69f5e8cdb2f0c11f",
+                "from": "user2",
+                "to": "user3",
+                "text": "hong chào",
+                "timestamp": 1778719213.3129237
+            },
+            {
+                "msg_id": "e4576b77e14a005eeb730487f163522e",
+                "from": "user3",
+                "to": "user2",
+                "text": "hêlo",
+                "timestamp": 1778719224.628914
+            },
+            {
+                "msg_id": "be3d4b80f52ebf2d7b0ee51b040c6d8d",
+                "from": "user2",
+                "to": "user3",
+                "text": "hi",
+                "timestamp": 1778720766.5544822
+            },
+            {
+                "msg_id": "5035b3e070bec7652775f4b4cf490fde",
+                "from": "user2",
+                "to": "user3",
+                "text": "a",
+                "timestamp": 1778724780.2854555
+            },
             {
                 "msg_id": "8fd16b56f82f8c70c55d5da69a5f7d6b",
                 "from": "user2",
                 "text": "ho",
                 "timestamp": 1778727985.723169,
                 "to": "user3"
+            },
+            {
+                "msg_id": "dec2ea7f1567d8ded6f6095895e0e208",
+                "from": "user3",
+                "text": "hi",
+                "timestamp": 1778729418.2839096,
+                "to": "user2"
+            },
+            {
+                "msg_id": "b2d851ae67451c9b9cff9ed8de10bee9",
+                "from": "user2",
+                "text": "hu",
+                "timestamp": 1778729422.5183823,
+                "to": "user3"
+            }
+        ]
+    },
+    "dm:user3<->user6": {
+        "members": [
+            "user3",
+            "user6"
+        ],
+        "messages": [
+            {
+                "msg_id": "2a9dadf2d3a466c39b7f5d2698adfeb4",
+                "from": "user3",
+                "to": "user6",
+                "text": "ê",
+                "timestamp": 1778720771.7755566
+            },
+            {
+                "msg_id": "da92b9de53fe13d1f0a71fde950a3f61",
+                "from": "user6",
+                "to": "user3",
+                "text": "sao",
+                "timestamp": 1778720775.7844508
             }
         ]
     },

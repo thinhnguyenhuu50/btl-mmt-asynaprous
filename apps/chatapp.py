@@ -7,28 +7,30 @@ import threading
 import uuid
 import urllib.request
 import hashlib
+
 from daemon import AsynapRous
 from daemon.auth import (
     authenticate, create_session, validate_session,
     get_session_username, build_auth_challenge
 )
+# Nhúng Interface trừu tượng (Interface này che giấu hoàn toàn ZMQ)
+from daemon.mq import MessageQueueInterface
 
 app = AsynapRous()
 CURRENT_PORT = 9000 
 CURRENT_USERNAME = None  
+mq = None 
 
-# ============================================================
-# LOGIC TRACKER & CACHE DANH BẠ (HYBRID P2P)
-# ============================================================
-TRACKER_URL = "http://10.130.8.37:80"
-
-active_peers_cache = [] 
-last_tracker_sync = 0
+# Trạng thái mạng lưới và giao diện
 online_status_cache = {} 
 channel_states = {} 
+active_peers_cache = []
 
-# --- BỔ SUNG: CƠ CHẾ LƯU DANH BẠ RA FILE ĐỂ SINH TỒN ---
+# ============================================================
+# CƠ SỞ DỮ LIỆU CÁCH LY 
+# ============================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_db_lock = threading.RLock()
 
 def get_cache_file():
     return os.path.join(BASE_DIR, f"peers_cache_{CURRENT_PORT}.json")
@@ -46,60 +48,6 @@ def save_peers_cache():
         with open(get_cache_file(), 'w') as f:
             json.dump(active_peers_cache, f)
     except: pass
-# --------------------------------------------------------
-
-def register_to_tracker():
-    try:
-        data = json.dumps({"port": CURRENT_PORT}).encode('utf-8')
-        req = urllib.request.Request(f"{TRACKER_URL}/submit-info/", data=data, headers={'Content-Type': 'application/json'}, method='POST')
-        urllib.request.urlopen(req, timeout=1)
-        print(f" [Tracker] Báo danh Port {CURRENT_PORT} thành công!")
-    except:
-        print(f" [Tracker] Port 80 không phản hồi. Port {CURRENT_PORT} dùng danh bạ P2P dự phòng.")
-
-def get_active_peers(force_update=False):
-    global active_peers_cache, last_tracker_sync
-    
-    # Nếu cache rỗng (mới bật máy), lôi từ ổ cứng ra xài ngay[cite: 7]
-    if not active_peers_cache:
-        load_peers_cache()
-        
-    if force_update or (time.time() - last_tracker_sync > 5): 
-        try:
-            req = urllib.request.Request(f"{TRACKER_URL}/get-list/")
-            with urllib.request.urlopen(req, timeout=0.5) as res:
-                data = json.loads(res.read().decode())
-                new_peers = data.get("peers", active_peers_cache)
-                # Nếu Proxy có cập nhật người mới, lưu ngay vào ổ cứng
-                if new_peers != active_peers_cache:
-                    active_peers_cache = new_peers
-                    save_peers_cache()
-                last_tracker_sync = time.time()
-        except: 
-            pass # Nếu Proxy sập, kệ nó, vẫn giữ nguyên active_peers_cache đã lấy từ ổ cứng[cite: 7]
-    return active_peers_cache
-
-def heartbeat_worker():
-    global online_status_cache
-    while True:
-        time.sleep(3) 
-        active_ports = get_active_peers(force_update=False)
-        new_status = {}
-        for port in active_ports:
-            if port == CURRENT_PORT: continue 
-            try:
-                req = urllib.request.Request(f"http://10.130.8.37:{port}/ping/")
-                with urllib.request.urlopen(req, timeout=1.0) as res:
-                    data = json.loads(res.read().decode())
-                    uname = data.get("data", {}).get("username")
-                    if uname: new_status[uname] = True
-            except Exception: pass 
-        online_status_cache = new_status
-
-# ============================================================
-# CƠ SỞ DỮ LIỆU CÁCH LY & XỬ LÝ COOKIE XUNG ĐỘT
-# ============================================================
-_db_lock = threading.RLock()
 
 def get_db_dir():
     db_dir = os.path.join(BASE_DIR, f"user_databases_{CURRENT_PORT}")
@@ -165,20 +113,6 @@ def save_db(username, data):
             os.replace(tmp_file, db_file) 
         except: pass
 
-def p2p_sync_worker(endpoint, payload):
-    payload['is_sync'] = True
-    payload['sender_port'] = CURRENT_PORT 
-    data_bytes = json.dumps(payload).encode('utf-8')
-    peers_to_send = get_active_peers(force_update=True)
-    
-    for peer_port in peers_to_send:
-        if peer_port == CURRENT_PORT: continue
-        url = f"http://10.130.8.37:{peer_port}{endpoint}"
-        try:
-            req = urllib.request.Request(url, data=data_bytes, headers={'Content-Type': 'application/json'}, method='POST')
-            urllib.request.urlopen(req, timeout=0.5)
-        except: pass
-
 def _decode_body(body):
     return body.decode('utf-8') if isinstance(body, bytes) else body
 
@@ -188,10 +122,118 @@ def _json_response(data, status="success"):
 def _error_response(message):
     return json.dumps({"status": "error", "message": message})
 
-# ============================================================
-# CÁC ROUTE CHỨC NĂNG CHAT
-# ============================================================
 
+# ============================================================
+# CÁC HÀM XỬ LÝ (CALLBACKS) KHI MESSAGE QUEUE TRẢ VỀ DỮ LIỆU
+# ============================================================
+def process_msg(data, is_dm):
+    from_u = data.get('from', '')
+    msg = data.get('message', '')
+    ts = data.get('timestamp')
+    mid = data.get('msg_id')
+    channel = data.get('channel', 'general')
+
+    all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
+    
+    if is_dm:
+        to_u = data.get('to', '')
+        channel = "dm:{}<->{}".format(*sorted([from_u, to_u]))
+        # FIX: Nếu là nhắn riêng, CHỈ cập nhật vào database của người gửi và người nhận
+        target_users = [from_u, to_u]
+    else:
+        # Nếu là nhóm chat chung, cập nhật cho tất cả (hoặc những người trong nhóm)
+        target_users = all_users
+
+    for u in set(target_users):
+        db = load_db(u)
+        
+        # Kiểm tra quyền: Nếu đây là nhóm kín (private), bỏ qua người ngoài
+        if not is_dm and channel in db:
+            ch_info = db[channel]
+            if ch_info.get('is_private', False) and u not in ch_info.get('allowed_members', []):
+                continue
+        
+        if channel not in db: 
+            db[channel] = {"members": [], "messages": []}
+        
+        if not any(m.get('msg_id') == mid for m in db[channel]["messages"][-50:]):
+            new_msg = {"msg_id": mid, "from": from_u, "text": msg, "timestamp": ts}
+            if is_dm: 
+                new_msg["to"] = data.get('to', '')
+            else: 
+                new_msg["channel"] = channel
+            db[channel]["messages"].append(new_msg)
+            
+        save_db(u, db)
+
+def on_broadcast(data):
+    process_msg(data, is_dm=False)
+
+def on_dm(data):
+    process_msg(data, is_dm=True)
+
+def on_create_channel(data):
+    name = data.get('name', '')
+    creator = data.get('creator', '')
+    is_private = data.get('is_private', False)
+    allowed_members = data.get('allowed_members', [])
+    if creator and creator not in allowed_members: allowed_members.append(creator)
+
+    all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
+    for u in all_users:
+        # FIX: Nếu tạo kênh private, chỉ những người được phép mới có kênh này trong DB
+        if is_private and u not in allowed_members:
+            continue
+            
+        db = load_db(u)
+        if name not in db:
+            db[name] = {
+                "members": [creator] if creator else [], 
+                "messages": [],
+                "is_private": is_private,
+                "allowed_members": allowed_members
+            }
+            save_db(u, db)
+
+def on_typing(data):
+    ch = data.get('channel', 'general')
+    user = data.get('username')
+    if ch not in channel_states: channel_states[ch] = {'typing': {}, 'reads': {}}
+    channel_states[ch]['typing'][user] = time.time()
+
+def on_read(data):
+    ch = data.get('channel', 'general')
+    user = data.get('username')
+    ts = float(data.get('timestamp', 0))
+    if ch not in channel_states: channel_states[ch] = {'typing': {}, 'reads': {}}
+    channel_states[ch]['reads'][user] = ts
+
+
+# ============================================================
+# HEARTBEAT WORKER (Cập nhật online/offline)
+# ============================================================
+def heartbeat_worker():
+    global online_status_cache
+    while True:
+        time.sleep(3) 
+        # Lấy danh sách từ Message Queue Interface
+        ports = mq.known_peers_list if mq else []
+        new_status = {}
+        for p in ports:
+            if p == CURRENT_PORT: continue 
+            try:
+                req = urllib.request.Request(f"http://127.0.0.1:{p}/ping/")
+                with urllib.request.urlopen(req, timeout=1.0) as res:
+                    d = json.loads(res.read().decode())
+                    uname = d.get("data", {}).get("username")
+                    if uname: new_status[uname] = True
+            except Exception: pass 
+        online_status_cache = new_status
+
+
+# ============================================================
+# CÁC ROUTE API CỦA ỨNG DỤNG (WEB HTTP)
+# ============================================================
 @app.route('/login/', methods=['GET', 'POST'])
 def login(headers="guest", body="anonymous", cookies=None):
     global CURRENT_USERNAME
@@ -204,7 +246,6 @@ def login(headers="guest", body="anonymous", cookies=None):
             session_id = create_session(username)
             save_shared_session(session_id, username)
             load_db(username) 
-            threading.Thread(target=p2p_sync_worker, args=('/sync-user/', {"username": username}), daemon=True).start()
 
             set_cookies = [
                 f"session_id_{CURRENT_PORT}={session_id}; Path=/; HttpOnly",
@@ -224,50 +265,6 @@ def ping(headers="guest", body="anonymous", cookies=None):
     if CURRENT_USERNAME:
         return _json_response({"username": CURRENT_USERNAME})
     return _error_response("Not logged in yet")
-
-@app.route('/submit-info/', methods=['POST'])
-def submit_info(headers="guest", body="anonymous", cookies=None):
-    global CURRENT_USERNAME
-    try:
-        data = json.loads(_decode_body(body))
-        if data.get('username'): CURRENT_USERNAME = data.get('username')
-        threading.Thread(target=register_to_tracker, daemon=True).start()
-        return _json_response({"status": "ok"})
-    except Exception as e: return _error_response(str(e))
-
-@app.route('/add-list/', methods=['POST'])
-def add_list(headers="guest", body="anonymous", cookies=None):
-    if not get_valid_username(cookies): return _error_response("401 Unauthorized")
-    global active_peers_cache
-    try:
-        data = json.loads(_decode_body(body))
-        new_port = data.get('port')
-        if new_port and new_port not in active_peers_cache:
-            active_peers_cache.append(new_port)
-            save_peers_cache() # Lưu liền tay
-            print(f" [Danh bạ] Đã thêm Peer thủ công tại Port: {new_port}")
-        return _json_response({"status": "ok", "message": f"Đã thêm Port {new_port} vào danh bạ"})
-    except Exception: return _error_response("Lỗi thêm vào danh sách")
-
-@app.route('/connect-peer/', methods=['POST'])
-def connect_peer(headers="guest", body="anonymous", cookies=None):
-    if not get_valid_username(cookies): return _error_response("401 Unauthorized")
-    global CURRENT_USERNAME
-    try:
-        data = json.loads(_decode_body(body))
-        target_port = data.get('port')
-        if target_port:
-            threading.Thread(target=p2p_sync_worker, args=('/sync-user/', {"username": CURRENT_USERNAME}), daemon=True).start()
-        return _json_response({"status": "ok"})
-    except Exception: return _error_response("Lỗi kết nối Peer")
-
-@app.route('/sync-user/', methods=['POST'])
-def sync_user(headers="guest", body="anonymous", cookies=None):
-    try:
-        data = json.loads(_decode_body(body))
-        if data.get('username'): load_db(data.get('username'))
-        return _json_response({"status": "ok"})
-    except: return _error_response("Lỗi")
 
 @app.route('/channels/', methods=['POST', 'GET'])
 def list_channels(headers="guest", body="anonymous", cookies=None): 
@@ -326,133 +323,6 @@ def fetch_messages(headers="guest", body="anonymous", cookies=None):
         })
     except: return _json_response({"messages": []})
 
-@app.route('/broadcast-peer/', methods=['POST'])
-def broadcast_peer(headers="guest", body="anonymous", cookies=None):
-    try:
-        data = json.loads(_decode_body(body))
-        is_sync = data.get('is_sync', False)
-        from_proxy = data.get('from_proxy', False)
-
-        if not is_sync and not from_proxy:
-            username = get_valid_username(cookies)
-            if not username: return _error_response("401 Unauthorized")
-            try:
-                data['sender_port'] = CURRENT_PORT
-                req = urllib.request.Request(f"{TRACKER_URL}/forward-broadcast/", data=json.dumps(data).encode('utf-8'), 
-                                           headers={'Content-Type': 'application/json'}, method='POST')
-                urllib.request.urlopen(req, timeout=0.5)
-                print(" [Smart Router] Đã ủy quyền Forwarding cho Proxy!")
-                return _json_response({"message": "Forwarded via Proxy"})
-            except Exception:
-                print(" [Smart Router] Proxy SẬP -> Kích hoạt cơ chế P2P Fallback!")
-
-        from_user, message, channel = data.get('from', ''), data.get('message', ''), data.get('channel', 'general')
-        sender_port = data.get('sender_port', 'Unknown')
-        
-        if is_sync or from_proxy: 
-            print(f" [Group: {channel}] Nhận tin nhắn từ '{from_user}' (Nguồn: 127.0.0.1:{sender_port})")
-
-        msg_ts = data.get('timestamp') or time.time()
-        msg_id = data.get('msg_id') or hashlib.md5(f"{from_user}{message}{channel}{uuid.uuid4().hex}".encode()).hexdigest()
-
-        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
-        for u in all_users:
-            db = load_db(u)
-            if channel not in db: db[channel] = {"members": [], "messages": []}
-            
-            if db[channel].get('is_private', False) and from_user not in db[channel].get('allowed_members', []):
-                continue
-
-            if not any(m.get('msg_id') == msg_id for m in db[channel]["messages"][-50:]):
-                db[channel]["messages"].append({
-                    "msg_id": msg_id, "from": from_user, "text": message, "timestamp": msg_ts, "channel": channel
-                })
-            save_db(u, db)
-
-        if not is_sync and not from_proxy:
-            data.update({"msg_id": msg_id, "timestamp": msg_ts})
-            threading.Thread(target=p2p_sync_worker, args=('/broadcast-peer/', data), daemon=True).start()
-
-        return _json_response({"message": "Sent", "msg_id": msg_id})
-    except: return _error_response("Lỗi")
-
-@app.route('/create-channel/', methods=['POST'])
-def create_channel(headers="guest", body="anonymous", cookies=None):
-    try:
-        data = json.loads(_decode_body(body))
-        is_sync = data.get('is_sync', False)
-
-        if not is_sync:
-            username = get_valid_username(cookies)
-            if not username: return _error_response("401 Unauthorized")
-
-        name, creator = data.get('name', ''), data.get('creator', '')
-        
-        is_private = data.get('is_private', False)
-        allowed_members = data.get('allowed_members', [])
-        if creator and creator not in allowed_members: allowed_members.append(creator)
-
-        all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
-        for u in all_users:
-            db = load_db(u)
-            if name not in db:
-                db[name] = {
-                    "members": [creator] if creator else [], 
-                    "messages": [],
-                    "is_private": is_private,
-                    "allowed_members": allowed_members
-                }
-                save_db(u, db)
-        if not is_sync: threading.Thread(target=p2p_sync_worker, args=('/create-channel/', data), daemon=True).start()
-        return _json_response({"channel": name})
-    except: return _error_response("Lỗi")
-
-@app.route('/send-peer/', methods=['POST'])
-def send_peer(headers="guest", body="anonymous", cookies=None):
-    try:
-        data = json.loads(_decode_body(body))
-        is_sync = data.get('is_sync', False)
-        from_proxy = data.get('from_proxy', False)
-
-        if not is_sync and not from_proxy:
-            username = get_valid_username(cookies)
-            if not username: return _error_response("401 Unauthorized")
-            try:
-                data['sender_port'] = CURRENT_PORT
-                req = urllib.request.Request(f"{TRACKER_URL}/forward-dm/", data=json.dumps(data).encode('utf-8'), 
-                                           headers={'Content-Type': 'application/json'}, method='POST')
-                urllib.request.urlopen(req, timeout=0.5)
-                print(" [Smart Router] Đã ủy quyền Forwarding DM cho Proxy!")
-                return _json_response({"message": "DM Forwarded via Proxy"})
-            except Exception:
-                print(" [Smart Router] Proxy SẬP -> Kích hoạt cơ chế DM P2P Fallback!")
-
-        from_user, to_user, message = data.get('from', ''), data.get('to', ''), data.get('message', '')
-        sender_port = data.get('sender_port', 'Unknown')
-        
-        if is_sync or from_proxy: 
-            print(f" [DM] Nhận tin cá nhân từ '{from_user}' gửi cho '{to_user}' (Nguồn: 127.0.0.1:{sender_port})")
-        
-        msg_ts = data.get('timestamp') or time.time()
-        msg_id = data.get('msg_id') or hashlib.md5(f"dm|{from_user}{to_user}{message}{uuid.uuid4().hex}".encode()).hexdigest()
-        dm_channel = "dm:{}<->{}".format(*sorted([from_user, to_user]))
-
-        for u in [from_user, to_user]:
-            db = load_db(u)
-            if dm_channel not in db: db[dm_channel] = {"members": sorted([from_user, to_user]), "messages": []}
-            if not any(m.get('msg_id') == msg_id for m in db[dm_channel]["messages"][-50:]):
-                db[dm_channel]["messages"].append({
-                    "msg_id": msg_id, "from": from_user, "to": to_user, "text": message, "timestamp": msg_ts
-                })
-            save_db(u, db)
-                
-        if not is_sync and not from_proxy:
-            data.update({"msg_id": msg_id, "timestamp": msg_ts})
-            threading.Thread(target=p2p_sync_worker, args=('/send-peer/', data), daemon=True).start()
-
-        return _json_response({"delivered_to": to_user, "channel": dm_channel})
-    except: return _error_response("Lỗi gửi DM")
-
 @app.route('/get-list/', methods=['GET', 'POST'])
 def get_list(headers="guest", body="anonymous", cookies=None):
     if not get_valid_username(cookies): return _error_response("401 Unauthorized")
@@ -469,22 +339,69 @@ def get_list(headers="guest", body="anonymous", cookies=None):
             
     return _json_response({"peers": list(peer_dict.values())})
 
+@app.route('/broadcast-peer/', methods=['POST'])
+def broadcast_peer(headers="guest", body="anonymous", cookies=None):
+    try:
+        username = get_valid_username(cookies)
+        if not username: return _error_response("401 Unauthorized")
+
+        data = json.loads(_decode_body(body))
+        data.update({
+            "from": username,
+            "msg_id": hashlib.md5(f"{uuid.uuid4().hex}".encode()).hexdigest(),
+            "timestamp": time.time()
+        })
+
+        # 1. Lưu DB nội bộ
+        on_broadcast(data)
+
+        # 2. Phát cho mạng lưới qua Interface
+        mq.send("CHAT_BROADCAST", data)
+
+        return _json_response({"message": "Sent", "msg_id": data["msg_id"]})
+    except: return _error_response("Lỗi")
+
+@app.route('/send-peer/', methods=['POST'])
+def send_peer(headers="guest", body="anonymous", cookies=None):
+    try:
+        username = get_valid_username(cookies)
+        if not username: return _error_response("401 Unauthorized")
+
+        data = json.loads(_decode_body(body))
+        data.update({
+            "from": username,
+            "msg_id": hashlib.md5(f"dm|{uuid.uuid4().hex}".encode()).hexdigest(),
+            "timestamp": time.time()
+        })
+
+        on_dm(data)
+        mq.send("CHAT_DM", data)
+        
+        dm_channel = "dm:{}<->{}".format(*sorted([username, data.get('to')]))
+        return _json_response({"delivered_to": data.get('to'), "channel": dm_channel})
+    except: return _error_response("Lỗi gửi DM")
+
+@app.route('/create-channel/', methods=['POST'])
+def create_channel(headers="guest", body="anonymous", cookies=None):
+    try:
+        username = get_valid_username(cookies)
+        if not username: return _error_response("401 Unauthorized")
+
+        data = json.loads(_decode_body(body))
+        on_create_channel(data)
+        mq.send("CHANNEL_CREATE", data)
+        return _json_response({"channel": data.get('name')})
+    except: return _error_response("Lỗi")
+
 @app.route('/signal-read/', methods=['POST'])
 def signal_read(headers="guest", body="anonymous", cookies=None):
     username = get_valid_username(cookies)
     if not username: return _error_response("401 Unauthorized")
     try:
         data = json.loads(_decode_body(body))
-        channel = data.get('channel', 'general')
-        ts = float(data.get('timestamp', 0))
-
-        if channel not in channel_states: channel_states[channel] = {'typing': {}, 'reads': {}}
-        channel_states[channel]['reads'][username] = ts
-
-        if not data.get('is_sync'):
-            data['is_sync'] = True
-            threading.Thread(target=p2p_sync_worker, args=('/signal-read/', data), daemon=True).start()
-
+        data['username'] = username
+        on_read(data)
+        mq.send("SIGNAL_READ", data)
         return _json_response({"status": "ok"})
     except: return _error_response("Lỗi")
 
@@ -494,24 +411,38 @@ def signal_typing(headers="guest", body="anonymous", cookies=None):
     if not username: return _error_response("401 Unauthorized")
     try:
         data = json.loads(_decode_body(body))
-        channel = data.get('channel', 'general')
-
-        if channel not in channel_states: channel_states[channel] = {'typing': {}, 'reads': {}}
-        channel_states[channel]['typing'][username] = time.time()
-
-        if not data.get('is_sync'):
-            data['is_sync'] = True
-            threading.Thread(target=p2p_sync_worker, args=('/signal-typing/', data), daemon=True).start()
-
+        data['username'] = username
+        on_typing(data)
+        mq.send("SIGNAL_TYPING", data)
         return _json_response({"status": "ok"})
     except: return _error_response("Lỗi")
 
+# ============================================================
+# KHỞI CHẠY HỆ THỐNG
+# ============================================================
 def create_chatapp(ip, port):
-    global CURRENT_PORT
+    global CURRENT_PORT, mq
     CURRENT_PORT = port
-    print(f" [ChatApp] Peer khởi động tại {ip}:{port}")
-    load_peers_cache() # Tải danh bạ ngay khi khởi động
-    threading.Thread(target=register_to_tracker, daemon=True).start()
+    print(f" [ChatApp] Node khởi động tại HTTP {ip}:{port}")
+    
+    load_peers_cache()
+
+    # 1. Khởi tạo đối tượng Interface Message Queue
+    mq = MessageQueueInterface(port=CURRENT_PORT)
+    
+    # 2. Đăng ký các hàm hứng sự kiện
+    mq.register_handler("CHAT_BROADCAST", on_broadcast)
+    mq.register_handler("CHAT_DM", on_dm)
+    mq.register_handler("CHANNEL_CREATE", on_create_channel)
+    mq.register_handler("SIGNAL_TYPING", on_typing)
+    mq.register_handler("SIGNAL_READ", on_read)
+    
+    # 3. Yêu cầu Message Queue bắt đầu chạy ngầm
+    mq.start()
+    
+    # 4. Bật luồng Heartbeat HTTP để cập nhật danh bạ
     threading.Thread(target=heartbeat_worker, daemon=True).start() 
+    
+    # 5. Chạy Web Server HTTP (AsynapRous)
     app.prepare_address(ip, port)
     app.run()
