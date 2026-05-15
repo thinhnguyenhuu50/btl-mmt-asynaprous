@@ -13,8 +13,8 @@ from daemon.auth import (
     authenticate, create_session, validate_session,
     get_session_username, build_auth_challenge
 )
-# Nhúng Interface trừu tượng (Interface này che giấu hoàn toàn ZMQ)
-from daemon.mq import MessageQueueInterface
+from daemon.backend import register_mq_handler, send_p2p
+import daemon.backend as backend_module
 
 app = AsynapRous()
 CURRENT_PORT = 9000 
@@ -217,7 +217,7 @@ def heartbeat_worker():
     while True:
         time.sleep(3) 
         # Lấy danh sách từ Message Queue Interface
-        ports = mq.known_peers_list if mq else []
+        ports = backend_module.known_peers_list
         new_status = {}
         for p in ports:
             if p == CURRENT_PORT: continue 
@@ -352,14 +352,16 @@ def broadcast_peer(headers="guest", body="anonymous", cookies=None):
             "timestamp": time.time()
         })
 
-        # 1. Lưu DB nội bộ
-        on_broadcast(data)
+        # --- FIX ZERO DELAY TẠI ĐÂY ---
+        # 1. Phát cho mạng lưới ZMQ ngay lập tức (Chỉ mất 0.1ms)
+        send_p2p("CHAT_BROADCAST", data)
 
-        # 2. Phát cho mạng lưới qua Interface
-        mq.send("CHAT_BROADCAST", data)
+        # 2. Đẩy việc lưu ổ cứng nặng nhọc sang một luồng nền (Daemon Thread)
+        threading.Thread(target=on_broadcast, args=(data,), daemon=True).start()
 
         return _json_response({"message": "Sent", "msg_id": data["msg_id"]})
-    except: return _error_response("Lỗi")
+    except Exception as e: 
+        return _error_response(f"Lỗi: {e}")
 
 @app.route('/send-peer/', methods=['POST'])
 def send_peer(headers="guest", body="anonymous", cookies=None):
@@ -375,7 +377,7 @@ def send_peer(headers="guest", body="anonymous", cookies=None):
         })
 
         on_dm(data)
-        mq.send("CHAT_DM", data)
+        send_p2p("CHAT_DM", data)
         
         dm_channel = "dm:{}<->{}".format(*sorted([username, data.get('to')]))
         return _json_response({"delivered_to": data.get('to'), "channel": dm_channel})
@@ -389,7 +391,7 @@ def create_channel(headers="guest", body="anonymous", cookies=None):
 
         data = json.loads(_decode_body(body))
         on_create_channel(data)
-        mq.send("CHANNEL_CREATE", data)
+        send_p2p("CHANNEL_CREATE", data)
         return _json_response({"channel": data.get('name')})
     except: return _error_response("Lỗi")
 
@@ -401,7 +403,7 @@ def signal_read(headers="guest", body="anonymous", cookies=None):
         data = json.loads(_decode_body(body))
         data['username'] = username
         on_read(data)
-        mq.send("SIGNAL_READ", data)
+        send_p2p("SIGNAL_READ", data)
         return _json_response({"status": "ok"})
     except: return _error_response("Lỗi")
 
@@ -413,7 +415,7 @@ def signal_typing(headers="guest", body="anonymous", cookies=None):
         data = json.loads(_decode_body(body))
         data['username'] = username
         on_typing(data)
-        mq.send("SIGNAL_TYPING", data)
+        send_p2p("SIGNAL_TYPING", data)
         return _json_response({"status": "ok"})
     except: return _error_response("Lỗi")
 
@@ -421,28 +423,22 @@ def signal_typing(headers="guest", body="anonymous", cookies=None):
 # KHỞI CHẠY HỆ THỐNG
 # ============================================================
 def create_chatapp(ip, port):
-    global CURRENT_PORT, mq
+    global CURRENT_PORT
     CURRENT_PORT = port
-    print(f" [ChatApp] Node khởi động tại HTTP {ip}:{port}")
+    print(f" [ChatApp] Đang nạp ứng dụng tại HTTP {ip}:{port}")
     
     load_peers_cache()
 
-    # 1. Khởi tạo đối tượng Interface Message Queue
-    mq = MessageQueueInterface(port=CURRENT_PORT)
+    # 1. Đăng ký các hàm hứng sự kiện ZMQ trực tiếp vào Backend
+    register_mq_handler("CHAT_BROADCAST", on_broadcast)
+    register_mq_handler("CHAT_DM", on_dm)
+    register_mq_handler("CHANNEL_CREATE", on_create_channel)
+    register_mq_handler("SIGNAL_TYPING", on_typing)
+    register_mq_handler("SIGNAL_READ", on_read)
     
-    # 2. Đăng ký các hàm hứng sự kiện
-    mq.register_handler("CHAT_BROADCAST", on_broadcast)
-    mq.register_handler("CHAT_DM", on_dm)
-    mq.register_handler("CHANNEL_CREATE", on_create_channel)
-    mq.register_handler("SIGNAL_TYPING", on_typing)
-    mq.register_handler("SIGNAL_READ", on_read)
-    
-    # 3. Yêu cầu Message Queue bắt đầu chạy ngầm
-    mq.start()
-    
-    # 4. Bật luồng Heartbeat HTTP để cập nhật danh bạ
+    # 2. Bật luồng Heartbeat HTTP để cập nhật danh bạ
     threading.Thread(target=heartbeat_worker, daemon=True).start() 
     
-    # 5. Chạy Web Server HTTP (AsynapRous)
+    # 3. Chạy hệ thống AsynapRous (Sẽ tự động kích hoạt Backend hợp nhất)
     app.prepare_address(ip, port)
     app.run()

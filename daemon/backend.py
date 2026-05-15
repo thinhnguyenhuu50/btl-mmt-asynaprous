@@ -1,54 +1,74 @@
+# File: daemon/backend.py
 import socket
 import threading
-import select  
+import zmq
+import time
 from .httpadapter import HttpAdapter
 
-MODE = "coroutine" 
+MODE = "coroutine"
 
+# ============================================================
+# BIẾN TOÀN CỤC ĐỂ CHATAPP GIAO TIẾP VỚI MESSAGE QUEUE
+# ============================================================
+pub_socket = None
+mq_callbacks = {}
+known_peers_list = []
 
-def handle_sync_client(conn, addr, routes):
-    try:
-        adapter = HttpAdapter(conn, addr, routes)
-        adapter.handle_client()
-    except Exception as e:
-        pass
-    finally:
-        conn.close()
+def register_mq_handler(topic, callback_func):
+    """API để đăng ký hàm xử lý sự kiện P2P"""
+    mq_callbacks[topic] = callback_func
 
+def send_p2p(topic, payload):
+    """API để bắn tin nhắn P2P ra mạng lưới"""
+    if pub_socket:
+        pub_socket.send_json({"topic": topic, "payload": payload})
 
-callback_readers = {} 
-
-def accept_callback(server_sock, routes):
-    conn, addr = server_sock.accept()
-    print(f"[Callback Manual] Accepted from {addr}")
-    conn.setblocking(False)
-    callback_readers[conn] = lambda c=conn: handle_callback_read(c, addr, routes)
-
-def handle_callback_read(conn, addr, routes):
-    try:
-        adapter = HttpAdapter(conn, addr, routes)
-        adapter.handle_client()
-    finally:
-        if conn in callback_readers:
-            del callback_readers[conn]
-        conn.close()
-
-
-tasks = []         
-coro_readers = {}   
-
-def accept_coroutine(server_sock, routes):
+# ============================================================
+# CƠ CHẾ DISCOVERY (CẬP NHẬT DANH BẠ TỪ TRACKER)
+# ============================================================
+def _tracker_sync_worker(context, http_port, zmq_port, sub_socket, tracker_url="tcp://127.0.0.1:80"):
+    global known_peers_list
+    connected_peers = set()
     while True:
-        yield 'read', server_sock
-        conn, addr = server_sock.accept()
-        print(f"[Coroutine Manual] Accepted from {addr}")
-        conn.setblocking(False)
-        tasks.append(handle_client_coroutine(conn, addr, routes))
+        req = context.socket(zmq.REQ)
+        req.RCVTIMEO = 2000
+        try:
+            req.connect(tracker_url)
+            req.send_json({
+                "action": "register",
+                "peer_id": f"peer_{http_port}",
+                "ip": "127.0.0.1",
+                "zmq_port": zmq_port
+            })
+            res = req.recv_json()
+            peers = res.get("peers", {})
+            
+            ports = []
+            for pid, info in peers.items():
+                p_port = info["zmq_port"] - 1000
+                ports.append(p_port)
+                # Chỉ kết nối tới Peer khác mình
+                if info["zmq_port"] != zmq_port:
+                    url = f"tcp://{info['ip']}:{info['zmq_port']}"
+                    if url not in connected_peers:
+                        sub_socket.connect(url)
+                        connected_peers.add(url)
+            known_peers_list = ports
+        except Exception:
+            pass
+        finally:
+            req.close()
+        time.sleep(5)
 
-def handle_client_coroutine(conn, addr, routes):
+# ============================================================
+# CÁC HÀM COROUTINE XỬ LÝ I/O
+# ============================================================
+def handle_client_coroutine(conn, addr, routes, poller):
+    """Coroutine đọc dữ liệu HTTP (TCP Thuần)"""
     data = b''
+    fd = conn.fileno()
     while True:
-        yield 'read', conn
+        yield 'read', fd
         try:
             chunk = conn.recv(8192)
             if not chunk: break
@@ -87,51 +107,103 @@ def handle_client_coroutine(conn, addr, routes):
             adapter = HttpAdapter(SyncSocketMock(data, conn), addr, routes)
             adapter.handle_client()
         except Exception as e:
-            print(f"[Coroutine Error] {e}")
+            print(f"[HTTP Error] {e}")
 
+    # Xong việc, gỡ theo dõi khỏi Poller và đóng kết nối
+    poller.unregister(fd)
     conn.close()
 
-def create_backend(ip, port, routes={}):
-    print(f" [Backend] Đang chạy {MODE.upper()} bằng Event Loop Thủ Công tại {ip}:{port}")
+def accept_coroutine(server_sock, routes, poller):
+    """Coroutine chờ kết nối HTTP mới"""
+    while True:
+        yield 'read', server_sock.fileno()
+        try:
+            conn, addr = server_sock.accept()
+            conn.setblocking(False)
+            poller.register(conn.fileno(), zmq.POLLIN)
+            # Yêu cầu Event Loop thêm task mới
+            yield 'new_task', handle_client_coroutine(conn, addr, routes, poller)
+        except BlockingIOError:
+            pass
 
+def receive_zmq_coroutine(sub_socket):
+    """Coroutine chờ tin nhắn ZMQ P2P mới"""
+    while True:
+        yield 'read', sub_socket
+        try:
+            msg = sub_socket.recv_json(flags=zmq.NOBLOCK)
+            topic, payload = msg.get("topic"), msg.get("payload")
+            if topic in mq_callbacks:
+                mq_callbacks[topic](payload)
+        except zmq.error.Again:
+            pass
+        except Exception:
+            pass
+
+# ============================================================
+# ENTRY POINT CỦA BACKEND
+# ============================================================
+def create_backend(ip, port, routes={}):
+    global pub_socket
+    print(f"\n{'='*55}")
+    print(f"🚀 KHỞI ĐỘNG ASYNAPROUS BROKERLESS BACKEND (UNIFIED)")
+    print(f"🌐 HTTP Web Server đang lắng nghe tại  : {ip}:{port}")
+    
+    # 1. Khởi tạo HTTP Server
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind((ip, int(port)))
     server.listen(100)
+    server.setblocking(False)
 
-    if MODE == "thread":
-        while True:
-            conn, addr = server.accept()
-            threading.Thread(target=handle_sync_client, args=(conn, addr, routes), daemon=True).start()
+    # 2. Khởi tạo ZeroMQ P2P
+    zmq_port = int(port) + 1000
+    context = zmq.Context()
+    pub_socket = context.socket(zmq.PUB)
+    pub_socket.bind(f"tcp://*:{zmq_port}")
+    print(f"⚡ Kênh Chat P2P (ZMQ) sẵn sàng tại cổng : {zmq_port}")
+    print(f"{'='*55}\n")
+    
+    sub_socket = context.socket(zmq.SUB)
+    sub_socket.setsockopt_string(zmq.SUBSCRIBE, "")
 
-    elif MODE == "callback":
-        server.setblocking(False)
-        callback_readers[server] = lambda: accept_callback(server, routes)
+    # 3. Kích hoạt luồng Sync Danh bạ P2P ngầm
+    threading.Thread(target=_tracker_sync_worker, args=(context, port, zmq_port, sub_socket), daemon=True).start()
+
+    # 4. Thiết lập Unified Poller (Giám sát đồng thời Web & ZMQ)
+    poller = zmq.Poller()
+    poller.register(server.fileno(), zmq.POLLIN)
+    poller.register(sub_socket, zmq.POLLIN)
+
+    tasks = []
+    coro_readers = {}
+
+    # Nạp 2 Coroutine chính yếu vào Event Loop
+    tasks.append(accept_coroutine(server, routes, poller))
+    tasks.append(receive_zmq_coroutine(sub_socket))
+
+    # 5. VÒNG LẶP SỰ KIỆN TRUNG TÂM
+    while tasks or coro_readers:
+        while tasks:
+            task = tasks.pop(0)
+            try:
+                op, val = next(task)
+                if op == 'read':
+                    coro_readers[val] = task 
+                elif op == 'new_task':
+                    # Đẩy task xử lý client mới vào danh sách, đồng thời đưa task accept quay lại
+                    tasks.append(val)
+                    tasks.append(task)
+            except StopIteration:
+                pass
         
-        while True:
-            if not callback_readers: break
-            r, _, _ = select.select(callback_readers.keys(), [], [])
-            for sock in r:
-                callback_readers[sock]() 
-
-    elif MODE == "coroutine":
-        server.setblocking(False)
-        tasks.append(accept_coroutine(server, routes))
+        if not coro_readers: break
         
-      
-        while tasks or coro_readers:
-            while tasks:
-                task = tasks.pop(0)
-                try:
-                    op, sock = next(task)
-                    if op == 'read':
-                        coro_readers[sock] = task # Đưa vào danh sách chờ
-                except StopIteration:
-                    pass # Hàm đã chạy xong thì bỏ qua
-            
-            if not coro_readers: break
-            
-            r, _, _ = select.select(coro_readers.keys(), [], [])
-            
-            for sock in r:
-                tasks.append(coro_readers.pop(sock))
+        # ZMQ Poller phát huy sức mạnh: Chờ cả Web và Chat
+        events = poller.poll(timeout=100)
+        
+        for obj, state in events:
+            if state & zmq.POLLIN:
+                # obj có thể là fileno (int) của socket TCP, hoặc là sub_socket của ZMQ
+                if obj in coro_readers:
+                    tasks.append(coro_readers.pop(obj))
