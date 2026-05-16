@@ -178,7 +178,7 @@ Request/response bodies use JSON format, making the protocol easy to debug and e
 python start_proxy.py --server-port 80
 
 # Terminal 2: (Optional) Start chat app ackend for static files
- python start_chatapp.py --server-ip 127.0.0.1 --server-port 8001
+python start_chatapp.py --server-ip 127.0.0.1 --server-port 8001
 # Terminal 3: (Optional) Start proxy
 
 # Open browser

@@ -1,0 +1,14 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "5a6011b2695ffa274f43ed4a32e8d2b5",
+                "from": "user2",
+                "text": "Test Speed 878",
+                "timestamp": 1778899777.295865,
+                "channel": "general"
+            }
+        ]
+    }
+}

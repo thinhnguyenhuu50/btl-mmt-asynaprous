@@ -1,0 +1,21 @@
+{
+    "general": {
+        "members": [],
+        "messages": [
+            {
+                "msg_id": "93e77ca8d66f5f6b4bcf106cb02f8e95",
+                "from": "user3",
+                "text": "Ê",
+                "timestamp": 1778848178.9689875,
+                "channel": "general"
+            },
+            {
+                "msg_id": "aef2229fb434bf411665617f3008f1e0",
+                "from": "user2",
+                "text": "sao rứa",
+                "timestamp": 1778848187.7901058,
+                "channel": "general"
+            }
+        ]
+    }
+}

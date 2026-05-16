@@ -6,17 +6,15 @@ def run_tracker(port=80):
     
     try:
         socket.bind(f"tcp://*:{port}")
-        print(f"[*] ZMQ Tracker (Danh bạ) đang chạy tại cổng {port}...")
-        print("[*] Tắt tracker này đi thì các Peer đã kết nối vẫn chat được trực tiếp (P2P)!\n")
+        print(f"[*] ZMQ Tracker đang chạy tại cổng {port}...\n")
     except zmq.error.ZMQError as e:
-        print(f"[!] Lỗi: Không thể chạy trên cổng {port}. Hãy chắc chắn bạn đã tắt start_proxy.py cũ đi nhé!")
+        print(f"[!] Lỗi: Không thể chạy trên cổng {port}")
         return
 
     peers = {} # Cấu trúc: { "peer_id": {"ip": "127.0.0.1", "zmq_port": 9001} }
 
     while True:
         try:
-            # Lắng nghe yêu cầu đăng ký từ các App
             message = socket.recv_json()
             action = message.get("action")
 

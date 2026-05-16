@@ -138,16 +138,15 @@ def process_msg(data, is_dm):
     if is_dm:
         to_u = data.get('to', '')
         channel = "dm:{}<->{}".format(*sorted([from_u, to_u]))
-        # FIX: Nếu là nhắn riêng, CHỈ cập nhật vào database của người gửi và người nhận
+
         target_users = [from_u, to_u]
     else:
-        # Nếu là nhóm chat chung, cập nhật cho tất cả (hoặc những người trong nhóm)
         target_users = all_users
 
     for u in set(target_users):
         db = load_db(u)
         
-        # Kiểm tra quyền: Nếu đây là nhóm kín (private), bỏ qua người ngoài
+        # Nếu đây là nhóm private, bỏ qua người ngoài
         if not is_dm and channel in db:
             ch_info = db[channel]
             if ch_info.get('is_private', False) and u not in ch_info.get('allowed_members', []):
@@ -181,7 +180,7 @@ def on_create_channel(data):
 
     all_users = [f.replace("db_", "").replace(".json", "") for f in os.listdir(get_db_dir()) if f.startswith("db_")]
     for u in all_users:
-        # FIX: Nếu tạo kênh private, chỉ những người được phép mới có kênh này trong DB
+        # Nếu tạo kênh private, chỉ những người được phép mới có kênh này trong DB
         if is_private and u not in allowed_members:
             continue
             
@@ -210,7 +209,7 @@ def on_read(data):
 
 
 # ============================================================
-# HEARTBEAT WORKER (Cập nhật online/offline)
+# HEARTBEAT WORKER 
 # ============================================================
 def heartbeat_worker():
     global online_status_cache
@@ -232,7 +231,7 @@ def heartbeat_worker():
 
 
 # ============================================================
-# CÁC ROUTE API CỦA ỨNG DỤNG (WEB HTTP)
+# CÁC ROUTE API CỦA ỨNG DỤNG
 # ============================================================
 @app.route('/login/', methods=['GET', 'POST'])
 def login(headers="guest", body="anonymous", cookies=None):
@@ -352,7 +351,6 @@ def broadcast_peer(headers="guest", body="anonymous", cookies=None):
             "timestamp": time.time()
         })
 
-        # --- FIX ZERO DELAY TẠI ĐÂY ---
         # 1. Phát cho mạng lưới ZMQ ngay lập tức (Chỉ mất 0.1ms)
         send_p2p("CHAT_BROADCAST", data)
 
